@@ -4,8 +4,8 @@ import { collectAll } from '@/lib/collect';
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

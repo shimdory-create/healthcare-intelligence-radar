@@ -13,6 +13,12 @@ const parser = new Parser();
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
+function parseDate(raw?: string): Date | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export async function fetchSourceArticles(source: SourceConfig): Promise<RawArticle[]> {
   const headers: Record<string, string> = {};
   if (source.requiresBrowserUA) {
@@ -41,7 +47,7 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
     results.push({
       title: item.title.trim(),
       url,
-      publishedAt: item.isoDate ? new Date(item.isoDate) : item.pubDate ? new Date(item.pubDate) : null,
+      publishedAt: parseDate(item.isoDate) ?? parseDate(item.pubDate),
       snippet: (item.contentSnippet || item.content || '').slice(0, 500),
     });
   }

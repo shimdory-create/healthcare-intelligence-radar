@@ -4,3 +4,5 @@ node_modules
 next-env.d.ts
 .worktrees
 .superpowers
+.vercel
+tsconfig.tsbuildinfo

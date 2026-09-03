@@ -28,6 +28,10 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
     summary.fetched = articles.length;
 
     for (const a of articles) {
+      if (!/^https?:\/\//i.test(a.url)) {
+        continue;
+      }
+
       if (await articleUrlExists(a.url)) {
         summary.skippedDuplicate++;
         continue;
@@ -46,17 +50,17 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
         continue;
       }
 
-      await insertArticle({
+      const inserted = await insertArticle({
         sourceId: source.id,
         title: a.title,
         url: a.url,
         titleNorm,
-        publishedAt: a.publishedAt,
+        publishedAt,
         snippet: a.snippet,
         tags,
         score,
       });
-      summary.inserted++;
+      if (inserted) summary.inserted++;
     }
   } catch (err) {
     summary.error = err instanceof Error ? err.message : String(err);
@@ -65,6 +69,28 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
   return summary;
 }
 
+const SOURCE_BUDGET_MS = 45_000;
+
 export async function collectAll(): Promise<CollectionSummary[]> {
-  return Promise.all(SOURCES.map((source) => collectSource(source)));
+  return Promise.all(
+    SOURCES.map((source) =>
+      Promise.race([
+        collectSource(source),
+        new Promise<CollectionSummary>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                sourceId: source.id,
+                fetched: 0,
+                inserted: 0,
+                skippedDuplicate: 0,
+                skippedNoTagMatch: 0,
+                error: 'source budget exceeded',
+              }),
+            SOURCE_BUDGET_MS,
+          ),
+        ),
+      ]),
+    ),
+  );
 }

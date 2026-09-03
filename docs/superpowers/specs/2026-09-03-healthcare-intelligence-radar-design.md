@@ -50,7 +50,7 @@ backend service.
 
 ```sql
 sources (
-  id            serial primary key,
+  id            text primary key,   -- natural-key slug, e.g. 'fsc', 'mohw' (shared with sources.config.ts)
   name          text not null,
   rss_url       text not null,
   tier          smallint not null,   -- 1 = gov, 2 = general/economic press, 3 = healthcare trade press
@@ -60,16 +60,20 @@ sources (
 
 articles (
   id              serial primary key,
-  source_id       int references sources(id),
+  source_id       text not null references sources(id),
   title           text not null,
   url             text not null unique,
+  title_norm      text not null,                    -- normalized title, used for dedup (see §6)
   published_at    timestamptz,
   collected_at    timestamptz not null default now(),
   content_snippet text,
   tags            text[] not null default '{}',
-  score           int not null default 0,          -- count of matched tags
-  title_norm      text not null                     -- normalized title, used for dedup (see §6)
+  score           int not null default 0            -- count of matched tags
 )
+
+-- indexes
+create index idx_articles_title_norm_published on articles (title_norm, published_at);
+create index idx_articles_published_at on articles (published_at desc);
 ```
 
 Two tables only. No separate `analyses`, `tags`, `article_tags`, or

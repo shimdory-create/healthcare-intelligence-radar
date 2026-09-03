@@ -1,6 +1,10 @@
 import postgres from 'postgres';
 
-export const sql = postgres(process.env.DATABASE_URL!, { ssl: 'require', prepare: false });
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set');
+}
+
+export const sql = postgres(process.env.DATABASE_URL, { ssl: 'require', prepare: false });
 
 export interface ArticleInsert {
   sourceId: string;
@@ -19,6 +23,7 @@ export async function articleUrlExists(url: string): Promise<boolean> {
 }
 
 export async function findSameDayTitleDuplicate(titleNorm: string, publishedAt: Date): Promise<boolean> {
+  if (Number.isNaN(publishedAt.getTime())) return false;
   const dayStart = new Date(Date.UTC(publishedAt.getUTCFullYear(), publishedAt.getUTCMonth(), publishedAt.getUTCDate()));
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const rows = await sql`
@@ -31,12 +36,14 @@ export async function findSameDayTitleDuplicate(titleNorm: string, publishedAt: 
   return rows.length > 0;
 }
 
-export async function insertArticle(a: ArticleInsert): Promise<void> {
-  await sql`
+export async function insertArticle(a: ArticleInsert): Promise<boolean> {
+  const rows = await sql`
     insert into articles (source_id, title, url, title_norm, published_at, content_snippet, tags, score)
     values (${a.sourceId}, ${a.title}, ${a.url}, ${a.titleNorm}, ${a.publishedAt}, ${a.snippet}, ${a.tags}, ${a.score})
     on conflict (url) do nothing
+    returning id
   `;
+  return rows.length > 0;
 }
 
 export interface ArticleRow {
@@ -75,7 +82,7 @@ function rowToArticle(r: any): ArticleRow {
 
 export async function getRecentArticles(filters: ArticleFilters = {}): Promise<ArticleRow[]> {
   const limit = filters.limit ?? 50;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postgres.js fragment types don't compose cleanly through an array
+  // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
   const conditions: any[] = [];
   if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
   if (filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
