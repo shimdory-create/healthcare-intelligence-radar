@@ -1,5 +1,8 @@
 node_modules
 .next
 .env.local
+next-env.d.ts
 .worktrees
 .superpowers
+.vercel
+tsconfig.tsbuildinfo
