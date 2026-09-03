@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a personal, single-user web app that daily collects RSS from 22 Korean healthcare/insurance-relevant sources, tags and dedupes them with zero AI cost, and shows them in a private dashboard.
+**Goal:** Build a personal, single-user web app that daily collects RSS from 23 Korean healthcare/insurance-relevant sources, tags and dedupes them with zero AI cost, and shows them in a private dashboard.
 
-**Architecture:** One Next.js (App Router, TypeScript) app on Vercel. A Vercel Cron job hits an internal API route once a day, which fetches all 22 RSS sources, tags/dedupes/filters them in plain TypeScript, and writes to a Supabase Postgres database. The same app's pages read from that database to render the dashboard. No separate backend service, no AI API calls.
+**Architecture:** One Next.js (App Router, TypeScript) app on Vercel. A Vercel Cron job hits an internal API route once a day, which fetches all 23 RSS sources, tags/dedupes/filters them in plain TypeScript, and writes to a Supabase Postgres database. The same app's pages read from that database to render the dashboard. No separate backend service, no AI API calls.
 
 **Tech Stack:** Next.js 15 (App Router) + TypeScript, `postgres` (postgres.js) as the DB driver against Supabase, `rss-parser` for feed parsing, Vitest for tests, Vercel for hosting + Cron.
 
@@ -31,10 +31,10 @@ notice/
   vercel.json                          # cron schedule
   .env.local.example
   db/
-    schema.sql                         # tables + seed data for 22 sources
+    schema.sql                         # tables + seed data for 23 sources
   src/
     lib/
-      sources.config.ts                # static list of 22 sources
+      sources.config.ts                # static list of 23 sources
       tags.config.ts                   # keyword dictionary
       normalize.ts                     # title normalization + same-day dedup check (pure)
       tagging.ts                       # keyword matching + scoring (pure)
@@ -228,7 +228,7 @@ git commit -m "chore: scaffold Next.js + TypeScript + Vitest project"
 - Test: `tests/sources.test.ts`
 
 **Interfaces:**
-- Produces: `SourceConfig` type, `SOURCES: SourceConfig[]` (22 entries) — every later task that touches collection or the DB imports this.
+- Produces: `SourceConfig` type, `SOURCES: SourceConfig[]` (23 entries) — every later task that touches collection or the DB imports this.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -239,8 +239,8 @@ import { describe, it, expect } from 'vitest';
 import { SOURCES } from '@/lib/sources.config';
 
 describe('SOURCES', () => {
-  it('has exactly 22 sources', () => {
-    expect(SOURCES.length).toBe(22);
+  it('has exactly 23 sources', () => {
+    expect(SOURCES.length).toBe(23);
   });
 
   it('has unique ids', () => {
@@ -332,7 +332,7 @@ Expected: PASS (5 tests).
 
 ```bash
 git add src/lib/sources.config.ts tests/sources.test.ts
-git commit -m "feat: add source registry for 22 RSS sources"
+git commit -m "feat: add source registry for 23 RSS sources"
 ```
 
 ---
@@ -779,7 +779,7 @@ git commit -m "feat: add RSS fetch/parse layer with Google News redirect resolut
 - Create: `.env.local.example`
 
 **Interfaces:**
-- Produces: a live Supabase Postgres database with `sources` (22 rows) and `articles` (empty) tables, and a `DATABASE_URL` connection string — consumed by Task 7's `db.ts`.
+- Produces: a live Supabase Postgres database with `sources` (23 rows) and `articles` (empty) tables, and a `DATABASE_URL` connection string — consumed by Task 7's `db.ts`.
 
 - [ ] **Step 1: Create the Supabase project (manual, one-time)**
 
@@ -851,7 +851,7 @@ on conflict (id) do update set
 
 In the Supabase dashboard, go to **SQL Editor → New query**, paste the full contents of `db/schema.sql`, and click **Run**.
 
-Expected: no errors; the **Table Editor** now shows `sources` (22 rows) and `articles` (0 rows).
+Expected: no errors; the **Table Editor** now shows `sources` (23 rows) and `articles` (0 rows).
 
 - [ ] **Step 4: Write `.env.local.example`**
 
@@ -868,7 +868,7 @@ Copy `.env.local.example` to `.env.local` and fill in the real `DATABASE_URL` fr
 
 ```bash
 git add db/schema.sql .env.local.example
-git commit -m "feat: add database schema and seed data for 22 sources"
+git commit -m "feat: add database schema and seed data for 23 sources"
 ```
 
 ---
@@ -1015,7 +1015,7 @@ await sql.end();
 ```
 
 Run: `node --env-file=.env.local scratch-db-check.mjs`
-Expected: prints `sources count: 22`.
+Expected: prints `sources count: 23`.
 
 Delete `scratch-db-check.mjs` afterward — it was only to confirm the connection works, not a permanent test (a live DB isn't mocked in the automated test suite, per this project's scale).
 
@@ -1142,7 +1142,7 @@ Run: `npm run dev`, then in another terminal:
 curl -H "Authorization: Bearer <your CRON_SECRET from .env.local>" http://localhost:3000/api/cron/collect
 ```
 
-Expected: a JSON response with a `summary` array of 22 entries, most with `error: null` and `inserted` counts ≥ 0. Check the Supabase **Table Editor → articles** table — it should now have rows, all with a non-empty `tags` array except any `tier = 1` rows with zero matches.
+Expected: a JSON response with a `summary` array of 23 entries, most with `error: null` and `inserted` counts ≥ 0. Check the Supabase **Table Editor → articles** table — it should now have rows, all with a non-empty `tags` array except any `tier = 1` rows with zero matches.
 
 - [ ] **Step 4: Commit**
 

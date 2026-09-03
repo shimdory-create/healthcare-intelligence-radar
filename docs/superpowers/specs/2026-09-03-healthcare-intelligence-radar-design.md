@@ -79,7 +79,7 @@ for v1. `tags` is stored as a plain Postgres array column; this is simple
 enough at this scale (YAGNI — normalize into join tables later only if
 actually needed).
 
-## 5. Sources (22 total)
+## 5. Sources (23 total)
 
 ### Tier 1 — 공공기관 (5, unconditional storage, `reliability: stable`)
 
@@ -199,7 +199,7 @@ less predictable mechanism, so it gets extra isolation:
 
 - Unit tests for: title normalization, dedup matching logic, keyword-tagging
   function (given fixed input strings, given a known tag dictionary).
-- Manual verification against live RSS feeds for all 22 sources before
+- Manual verification against live RSS feeds for all 23 sources before
   first scheduled run (confirm each parses without error and produces
   sane items).
 - No automated test needed for the Google News RSS redirect-resolution path
