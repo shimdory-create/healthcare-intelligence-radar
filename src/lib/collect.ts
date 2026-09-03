@@ -69,28 +69,27 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
   return summary;
 }
 
-const SOURCE_BUDGET_MS = 45_000;
+const SOURCE_BUDGET_MS = 120_000;
+
+function collectSourceWithBudget(source: SourceConfig): Promise<CollectionSummary> {
+  let timer: ReturnType<typeof setTimeout>;
+  const budget = new Promise<CollectionSummary>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve({
+          sourceId: source.id,
+          fetched: 0,
+          inserted: 0,
+          skippedDuplicate: 0,
+          skippedNoTagMatch: 0,
+          error: 'source budget exceeded',
+        }),
+      SOURCE_BUDGET_MS,
+    );
+  });
+  return Promise.race([collectSource(source), budget]).finally(() => clearTimeout(timer));
+}
 
 export async function collectAll(): Promise<CollectionSummary[]> {
-  return Promise.all(
-    SOURCES.map((source) =>
-      Promise.race([
-        collectSource(source),
-        new Promise<CollectionSummary>((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                sourceId: source.id,
-                fetched: 0,
-                inserted: 0,
-                skippedDuplicate: 0,
-                skippedNoTagMatch: 0,
-                error: 'source budget exceeded',
-              }),
-            SOURCE_BUDGET_MS,
-          ),
-        ),
-      ]),
-    ),
-  );
+  return Promise.all(SOURCES.map((source) => collectSourceWithBudget(source)));
 }
