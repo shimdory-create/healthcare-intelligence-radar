@@ -13,9 +13,18 @@ const parser = new Parser();
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
+// Matches a bare "YYYY-MM-DD HH:mm:ss" (or with 'T') timestamp with no timezone marker --
+// several Korean feeds (hitnews, rapportian, bosa, monews, pharmnews) publish dates in this
+// form. It's already Korea local time, but parsing it without an explicit offset is
+// environment-dependent (`new Date()` treats it as the *server's* local time) -- correct by
+// accident on a KST dev machine, off by 9 hours on Vercel's UTC runtime.
+const NAIVE_LOCAL_DATE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/;
+
 function parseDate(raw?: string): Date | null {
   if (!raw) return null;
-  const d = new Date(raw);
+  const trimmed = raw.trim();
+  const iso = NAIVE_LOCAL_DATE.test(trimmed) ? `${trimmed.replace(' ', 'T')}+09:00` : trimmed;
+  const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -67,7 +76,7 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
     results.push({
       title: decodeHtmlEntities(item.title.trim()),
       url,
-      publishedAt: parseDate(item.isoDate) ?? parseDate(item.pubDate),
+      publishedAt: parseDate(item.pubDate) ?? parseDate(item.isoDate),
       snippet: decodeHtmlEntities((item.contentSnippet || item.content || '').slice(0, 500)),
     });
   }

@@ -13,6 +13,17 @@ const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
   </item>
 </channel></rss>`;
 
+const NAIVE_DATE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Sample Feed</title>
+  <item>
+    <title>비대면 약 배송 확대</title>
+    <link>https://example.com/articles/3</link>
+    <pubDate>2026-09-04 06:10:00</pubDate>
+    <description>비대면 진료 관련 기사.</description>
+  </item>
+</channel></rss>`;
+
 const DOUBLE_ESCAPED_RSS = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
   <title>Sample Feed</title>
@@ -54,6 +65,30 @@ describe('fetchSourceArticles', () => {
     expect(articles[0].url).toBe('https://example.com/articles/1');
     expect(articles[0].publishedAt).toBeInstanceOf(Date);
     expect(articles[0].snippet).toContain('비만치료제');
+  });
+
+  it('treats a bare "YYYY-MM-DD HH:mm:ss" pubDate (no timezone marker) as Korea time', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => NAIVE_DATE_RSS,
+      }),
+    );
+
+    const source: SourceConfig = {
+      id: 'hitnews',
+      name: '히트뉴스',
+      rssUrl: 'https://example.com/rss.xml',
+      tier: 3,
+      reliability: 'stable',
+      fetchMethod: 'rss',
+    };
+
+    const articles = await fetchSourceArticles(source);
+    // 2026-09-04 06:10:00 KST == 2026-09-03 21:10:00 UTC, regardless of the host's own timezone
+    expect(articles[0].publishedAt?.toISOString()).toBe('2026-09-03T21:10:00.000Z');
   });
 
   it('decodes double-escaped HTML entities left over after XML parsing', async () => {
