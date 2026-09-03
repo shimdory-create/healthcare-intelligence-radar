@@ -34,7 +34,7 @@ async function sendEmailDigest(batch: LatestBatch): Promise<string> {
 async function sendKakaoDigest(batch: LatestBatch): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
   const { counts } = batch;
-  const text = `🩺 헬스케어 심텔리전스 레이더\n${formatKstDate(batch.collectedDate)} 수집 · 총 ${counts.total}건\n🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low}`;
+  const text = `🩺 헬스케어 레이더\n${formatKstDate(batch.collectedDate)} 수집 · 총 ${counts.total}건\n🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low}`;
   await sendKakaoMemo(text, resolveDashboardUrl());
   return 'sent';
 }

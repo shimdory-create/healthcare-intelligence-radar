@@ -52,7 +52,7 @@ export function buildDigestHtml(
 
   return `
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#ffffff;color:#111;">
-      <h2 style="margin-bottom:4px;">헬스케어 심텔리전스 레이더</h2>
+      <h2 style="margin-bottom:4px;">헬스케어 레이더</h2>
       <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
       <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
       <p style="margin:0 0 16px;font-size:11px;color:#999;line-height:1.5;">
@@ -93,7 +93,7 @@ export async function sendDigestEmail(articles: ArticleRow[], counts: PriorityCo
     body: JSON.stringify({
       from: process.env.EMAIL_FROM ?? 'Healthcare Radar <onboarding@resend.dev>',
       to,
-      subject: `[헬스케어 심텔리전스 레이더] ${dateLabel} 수집 요약 (${counts.total}건)`,
+      subject: `[헬스케어 레이더] ${dateLabel} 수집 요약 (${counts.total}건)`,
       html,
     }),
   });
