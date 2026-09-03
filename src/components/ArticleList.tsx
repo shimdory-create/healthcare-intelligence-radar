@@ -25,6 +25,7 @@ export function ArticleList({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[60px] text-center">티어</TableHead>
             <TableHead className="w-[92px] text-center">우선순위</TableHead>
             <TableHead className="text-center">제목</TableHead>
             <TableHead className="text-center">출처</TableHead>

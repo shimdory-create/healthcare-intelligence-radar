@@ -9,6 +9,9 @@ export function ArticleCard({ article }: { article: ArticleRow }) {
   return (
     <TableRow>
       <TableCell className="text-center">
+        <Badge variant="outline">T{article.tier}</Badge>
+      </TableCell>
+      <TableCell className="text-center">
         <PriorityBadge score={article.score} />
       </TableCell>
       <TableCell className="max-w-[420px] whitespace-normal">

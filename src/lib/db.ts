@@ -49,6 +49,7 @@ export async function insertArticle(a: ArticleInsert): Promise<boolean> {
 export interface ArticleRow {
   id: number;
   sourceId: string;
+  tier: 1 | 2 | 3;
   title: string;
   url: string;
   publishedAt: Date | null;
@@ -58,8 +59,11 @@ export interface ArticleRow {
   score: number;
 }
 
+export type PriorityFilter = 'high' | 'medium' | 'low';
+
 export interface ArticleFilters {
   tier?: 1 | 2 | 3;
+  priority?: PriorityFilter;
   tag?: string;
   sourceId?: string;
   search?: string;
@@ -71,6 +75,7 @@ function rowToArticle(r: any): ArticleRow {
   return {
     id: r.id,
     sourceId: r.source_id,
+    tier: r.tier,
     title: r.title,
     url: r.url,
     publishedAt: r.published_at,
@@ -92,6 +97,9 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
   const conditions: any[] = [];
   if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
+  if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
+  if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
+  if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
   if (filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
   if (filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
   if (filters.search) {
@@ -109,11 +117,11 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
 
   // fetch one extra row to detect whether a next page exists, without a separate count query
   const rows = await sql`
-    select a.id, a.source_id, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
+    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
     from articles a
     join sources s on s.id = a.source_id
     ${where}
-    order by s.tier asc, a.published_at desc nulls last
+    order by a.score desc, a.published_at desc nulls last
     limit ${limit + 1}
     offset ${offset}
   `;
@@ -123,8 +131,10 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
 
 export async function getArticleById(id: number): Promise<ArticleRow | null> {
   const rows = await sql`
-    select id, source_id, title, url, published_at, collected_at, content_snippet, tags, score
-    from articles where id = ${id}
+    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
+    from articles a
+    join sources s on s.id = a.source_id
+    where a.id = ${id}
   `;
   return rows.length > 0 ? rowToArticle(rows[0]) : null;
 }
