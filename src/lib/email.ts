@@ -35,8 +35,8 @@ export function buildDigestHtml(
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;">
       <h2 style="margin-bottom:4px;">헬스케어 심텔리전스 레이더</h2>
       <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
+      <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
       <table style="width:100%;border-collapse:collapse;">${rows}</table>
-      <p style="margin-top:16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
     </div>`;
 }
 
