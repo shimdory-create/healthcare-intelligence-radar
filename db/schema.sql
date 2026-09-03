@@ -23,6 +23,14 @@ create table if not exists articles (
 create index if not exists idx_articles_title_norm_published on articles (title_norm, published_at);
 create index if not exists idx_articles_published_at on articles (published_at desc);
 
+-- generic key-value store for small pieces of app state (e.g. the Kakao OAuth refresh token)
+-- that need to persist across serverless invocations, unlike a static env var
+create table if not exists app_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
 insert into sources (id, name, rss_url, tier, reliability, fetch_method) values
   ('fsc', '금융위원회', 'http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', 1, 'stable', 'rss'),
   ('mohw', '보건복지부', 'https://www.mohw.go.kr/rss/board.es?mid=a10503000000&bid=0027', 1, 'stable', 'rss'),

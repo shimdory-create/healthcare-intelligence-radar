@@ -187,6 +187,19 @@ export async function getPriorityCounts(collectedDate?: string): Promise<Priorit
   return rows[0] as PriorityCounts;
 }
 
+export async function getAppSetting(key: string): Promise<string | null> {
+  const rows = await sql`select value from app_settings where key = ${key}`;
+  return rows[0]?.value ?? null;
+}
+
+export async function setAppSetting(key: string, value: string): Promise<void> {
+  await sql`
+    insert into app_settings (key, value, updated_at)
+    values (${key}, ${value}, now())
+    on conflict (key) do update set value = excluded.value, updated_at = now()
+  `;
+}
+
 export async function getArticleById(id: number): Promise<ArticleRow | null> {
   const rows = await sql`
     select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score

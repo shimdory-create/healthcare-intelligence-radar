@@ -1,20 +1,11 @@
 import Link from 'next/link';
 import { getRecentArticles, getLatestCollectionDate, getLastCollectedAt, getPriorityCounts, type PriorityFilter } from '@/lib/db';
+import { formatKstDate } from '@/lib/dateFormat';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
 
 const PAGE_SIZE = 50;
 const VALID_PRIORITIES: PriorityFilter[] = ['high', 'medium', 'low', 'all'];
-
-function formatKstDate(dateStr: string): string {
-  // noon avoids any DST/boundary edge cases when formatting a bare calendar date
-  return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  });
-}
 
 export default async function HomePage({
   searchParams,
