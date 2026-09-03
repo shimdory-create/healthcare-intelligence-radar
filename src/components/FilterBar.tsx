@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { FilterSelect } from './FilterSelect';
 import { DateNav } from './DateNav';
 import { SOURCES } from '@/lib/sources.config';
+import { TAGS } from '@/lib/tags.config';
 
 const TIER_GROUPS = [
   {
@@ -20,7 +21,6 @@ const PRIORITY_GROUPS = [
       { value: 'high', label: '🔴 높음' },
       { value: 'medium', label: '🟡 보통' },
       { value: 'low', label: '⚪ 참고' },
-      { value: 'all', label: '전체 (참고 포함)' },
     ],
   },
 ];
@@ -35,6 +35,12 @@ const SOURCE_GROUPS = ([1, 2, 3] as const).map((tier) => ({
   label: TIER_GROUP_LABELS[tier],
   options: SOURCES.filter((s) => s.tier === tier).map((s) => ({ value: s.id, label: s.name })),
 }));
+
+const TAG_GROUPS = [
+  {
+    options: TAGS.map((t) => ({ value: t.tag, label: t.tag })),
+  },
+];
 
 export function FilterBar({
   tier,
@@ -62,20 +68,25 @@ export function FilterBar({
         <DateNav currentDate={currentDate} latestDate={latestDate} isAllTime={isAllTime} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect paramName="priority" currentValue={priority} allLabel="전체 우선순위" groups={PRIORITY_GROUPS} className="w-[160px]" />
         <FilterSelect paramName="tier" currentValue={tier ? String(tier) : undefined} allLabel="전체 티어" groups={TIER_GROUPS} className="w-[170px]" />
-        <FilterSelect paramName="priority" currentValue={priority} allLabel="참고 제외 (기본)" groups={PRIORITY_GROUPS} className="w-[160px]" />
         <FilterSelect paramName="sourceId" currentValue={sourceId} allLabel="전체 출처" groups={SOURCE_GROUPS} className="w-[190px]" />
-        <form method="get" className="flex flex-wrap items-center gap-2">
-          {!isAllTime && currentDate !== latestDate && <input type="hidden" name="date" value={currentDate} />}
-          {isAllTime && <input type="hidden" name="date" value="all-time" />}
-          {tier && <input type="hidden" name="tier" value={tier} />}
-          {priority && <input type="hidden" name="priority" value={priority} />}
-          {sourceId && <input type="hidden" name="sourceId" value={sourceId} />}
-          <Input name="tag" defaultValue={tag ?? ''} placeholder="태그 (예: GLP-1)" className="w-[180px]" />
-          <Input name="search" defaultValue={search ?? ''} placeholder="검색어" className="w-[200px]" />
-          <Button type="submit">조회</Button>
-        </form>
+        <FilterSelect paramName="tag" currentValue={tag} allLabel="전체 태그" groups={TAG_GROUPS} className="w-[160px]" />
       </div>
+      <form method="get" className="flex flex-wrap items-center gap-2">
+        {!isAllTime && currentDate !== latestDate && <input type="hidden" name="date" value={currentDate} />}
+        {isAllTime && <input type="hidden" name="date" value="all-time" />}
+        {tier && <input type="hidden" name="tier" value={tier} />}
+        {priority && <input type="hidden" name="priority" value={priority} />}
+        {sourceId && <input type="hidden" name="sourceId" value={sourceId} />}
+        {tag && <input type="hidden" name="tag" value={tag} />}
+        <Input name="search" defaultValue={search ?? ''} placeholder="검색어 (제목·본문)" className="w-[200px]" />
+        <Button type="submit">조회</Button>
+      </form>
+      <p className="text-muted-foreground text-xs">
+        추출 기준: 키워드에 매칭된 기사에 태그와 우선순위를 부여합니다 (공공기관 자료는 매칭 여부와 무관하게 모두 수집). 정렬
+        기준: 우선순위 높은 순 → 최신순. 검색은 제목과 본문을 함께 찾습니다.
+      </p>
     </div>
   );
 }

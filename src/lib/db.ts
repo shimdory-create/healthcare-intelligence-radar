@@ -106,14 +106,10 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
   const conditions: any[] = [];
   if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
-  // Tier 1's unconditional storage policy means a lot of score=0 rows are
-  // unrelated public-agency notices (bus schedules, unrelated announcements).
-  // Default to hiding them unless the caller explicitly asks for 'all' or 'low'.
-  if (!filters.priority) conditions.push(sql`a.score >= 1`);
-  else if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
+  // no priority filter -> show every score band; sorting already puts higher-priority rows first
+  if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
   else if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
   else if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
-  // filters.priority === 'all' -> no score condition, show everything
   if (filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
   if (filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
   if (filters.search) {
