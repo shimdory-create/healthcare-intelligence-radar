@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collectAll } from '@/lib/collect';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
