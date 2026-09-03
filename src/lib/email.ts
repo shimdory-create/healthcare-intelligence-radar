@@ -20,17 +20,6 @@ export function buildDigestHtml(
   dateLabel: string,
   dashboardUrl: string,
 ): string {
-  const tableRows = articles
-    .map(
-      (a) => `
-    <tr>
-      <td style="padding:6px 8px;white-space:nowrap;font-size:13px;">${priorityLabel(a.score)}</td>
-      <td style="padding:6px 8px;white-space:nowrap;font-size:13px;color:#666;">${escapeHtml(sourceDisplayName(a.sourceId))}</td>
-      <td style="padding:6px 8px;font-size:14px;"><a href="${escapeHtml(a.url)}" style="color:#111;text-decoration:none;">${escapeHtml(a.title)}</a></td>
-    </tr>`,
-    )
-    .join('');
-
   const cards = articles
     .map(
       (a) => `
@@ -42,27 +31,12 @@ export function buildDigestHtml(
     .join('');
 
   return `
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <style>
-        .rt-mobile { display: none; }
-        @media (max-width: 480px) {
-          .rt-desktop { display: none !important; }
-          .rt-mobile { display: block !important; }
-        }
-      </style>
-    </head>
-    <body style="margin:0;padding:0;background:#ffffff;color:#111;">
-      <div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#ffffff;color:#111;">
-        <h2 style="margin-bottom:4px;">헬스케어 심텔리전스 레이더</h2>
-        <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
-        <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
-        <table class="rt-desktop" style="width:100%;border-collapse:collapse;">${tableRows}</table>
-        <div class="rt-mobile">${cards}</div>
-      </div>
-    </body>
-    </html>`;
+    <div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#ffffff;color:#111;">
+      <h2 style="margin-bottom:4px;">헬스케어 심텔리전스 레이더</h2>
+      <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
+      <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
+      ${cards}
+    </div>`;
 }
 
 export function resolveDashboardUrl(): string {
