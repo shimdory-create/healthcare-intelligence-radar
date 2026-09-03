@@ -64,6 +64,7 @@ export interface ArticleFilters {
   sourceId?: string;
   search?: string;
   limit?: number;
+  offset?: number;
 }
 
 function rowToArticle(r: any): ArticleRow {
@@ -80,8 +81,14 @@ function rowToArticle(r: any): ArticleRow {
   };
 }
 
-export async function getRecentArticles(filters: ArticleFilters = {}): Promise<ArticleRow[]> {
+export interface ArticlePage {
+  articles: ArticleRow[];
+  hasNextPage: boolean;
+}
+
+export async function getRecentArticles(filters: ArticleFilters = {}): Promise<ArticlePage> {
   const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
   // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
   const conditions: any[] = [];
   if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
@@ -100,15 +107,18 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
     }
   }
 
+  // fetch one extra row to detect whether a next page exists, without a separate count query
   const rows = await sql`
     select a.id, a.source_id, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
     from articles a
     join sources s on s.id = a.source_id
     ${where}
-    order by a.published_at desc nulls last
-    limit ${limit}
+    order by s.tier asc, a.published_at desc nulls last
+    limit ${limit + 1}
+    offset ${offset}
   `;
-  return rows.map(rowToArticle);
+  const hasNextPage = rows.length > limit;
+  return { articles: rows.slice(0, limit).map(rowToArticle), hasNextPage };
 }
 
 export async function getArticleById(id: number): Promise<ArticleRow | null> {

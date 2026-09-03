@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getArticleById } from '@/lib/db';
+import { sourceDisplayName } from '@/lib/sourceLookup';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -21,13 +22,13 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
         <CardHeader>
           <CardTitle className="text-xl leading-snug font-semibold">{article.title}</CardTitle>
           <p className="text-muted-foreground text-sm">
-            {article.sourceId} ·{' '}
+            {sourceDisplayName(article.sourceId)} ·{' '}
             {article.publishedAt
               ? article.publishedAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
               : '날짜 미상'}
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="flex flex-wrap gap-1">
             {article.tags.length > 0 ? (
               article.tags.map((tag) => (
@@ -39,7 +40,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
               <span className="text-muted-foreground text-sm">태그 없음</span>
             )}
           </div>
-          {article.snippet && <p className="text-sm leading-relaxed">{article.snippet}</p>}
+          {article.snippet && (
+            <div className="border-primary/30 bg-muted/40 rounded-md border-l-2 py-3 pr-4 pl-4">
+              <p className="text-sm leading-relaxed whitespace-pre-line">{article.snippet}</p>
+            </div>
+          )}
           <Separator />
           <a
             href={article.url}
