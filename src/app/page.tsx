@@ -18,10 +18,13 @@ export default async function HomePage({
   });
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1>Healthcare Intelligence Radar</h1>
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <h1 className="text-2xl font-semibold tracking-tight">Healthcare Intelligence Radar</h1>
+      <p className="text-muted-foreground mt-1 mb-6 text-sm">보험사 헬스케어 관점 뉴스 센싱 대시보드</p>
       <FilterBar tier={tier} tag={params.tag} search={params.search} />
-      <ArticleList articles={articles} />
+      <div className="overflow-hidden rounded-lg border">
+        <ArticleList articles={articles} />
+      </div>
     </main>
   );
 }
