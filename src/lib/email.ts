@@ -14,6 +14,25 @@ function priorityLabel(score: number): string {
   return '⚪ 참고';
 }
 
+function publishedLabel(publishedAt: Date | null): string {
+  if (!publishedAt) return '날짜 미상';
+  return publishedAt.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function tagsHtml(tags: string[]): string {
+  if (tags.length === 0) return '';
+  const pills = tags
+    .map((t) => `<span style="display:inline-block;font-size:11px;color:#666;border:1px solid #e5e5e5;border-radius:5px;padding:1px 6px;margin:4px 4px 0 0;">${escapeHtml(t)}</span>`)
+    .join('');
+  return `<div>${pills}</div>`;
+}
+
 export function buildDigestHtml(
   articles: ArticleRow[],
   counts: PriorityCounts,
@@ -24,8 +43,9 @@ export function buildDigestHtml(
     .map(
       (a) => `
     <div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px 12px;margin:0 0 8px;">
-      <p style="margin:0 0 4px;font-size:12px;color:#666;">${priorityLabel(a.score)} · ${escapeHtml(sourceDisplayName(a.sourceId))}</p>
+      <p style="margin:0 0 4px;font-size:12px;color:#666;">${priorityLabel(a.score)} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
       <a href="${escapeHtml(a.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(a.title)}</a>
+      ${tagsHtml(a.tags)}
     </div>`,
     )
     .join('');
