@@ -1,10 +1,13 @@
 export interface TagDefinition {
   tag: string;
   keywords: string[];
+  /** substrings that should NOT count toward a match even though they contain a keyword
+   *  (e.g. "암호화" contains "암" but has nothing to do with cancer) */
+  excludeKeywords?: string[];
 }
 
 export const TAGS: TagDefinition[] = [
-  { tag: '암', keywords: ['암'] },
+  { tag: '암', keywords: ['암'], excludeKeywords: ['암호'] },
   { tag: '심뇌혈관', keywords: ['심뇌혈관', '심혈관', '뇌혈관', '심근경색', '뇌졸중'] },
   { tag: '중증질환', keywords: ['중증질환'] },
   { tag: '비만', keywords: ['비만'] },
@@ -33,4 +36,9 @@ export const TAGS: TagDefinition[] = [
   { tag: 'M&A', keywords: ['M&A', '인수합병', '인수 합병'] },
   { tag: '투자', keywords: ['투자 유치', 'VC 투자', '지분투자'] },
   { tag: '디지털헬스', keywords: ['디지털헬스', '디지털 헬스'] },
+  { tag: '보험', keywords: ['보험'] },
+  { tag: '비대면의료', keywords: ['비대면진료', '비대면의료', '원격의료', '원격진료'] },
+  { tag: '플랫폼', keywords: ['플랫폼'] },
+  { tag: '정신건강', keywords: ['정신건강', '정신질환', '우울증'] },
+  { tag: '마이데이터', keywords: ['마이데이터'] },
 ];

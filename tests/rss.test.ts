@@ -13,6 +13,17 @@ const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
   </item>
 </channel></rss>`;
 
+const DOUBLE_ESCAPED_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Sample Feed</title>
+  <item>
+    <title>&amp;apos;국가통합바이오빅데이터구축사업단&amp;apos; 대학생 홍보 서포터즈 2기 발대식</title>
+    <link>https://example.com/articles/2</link>
+    <pubDate>Thu, 3 Sep 2026 09:00:00 +0900</pubDate>
+    <description>서포터즈 2기 발대식이 열렸다.</description>
+  </item>
+</channel></rss>`;
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -43,6 +54,29 @@ describe('fetchSourceArticles', () => {
     expect(articles[0].url).toBe('https://example.com/articles/1');
     expect(articles[0].publishedAt).toBeInstanceOf(Date);
     expect(articles[0].snippet).toContain('비만치료제');
+  });
+
+  it('decodes double-escaped HTML entities left over after XML parsing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => DOUBLE_ESCAPED_RSS,
+      }),
+    );
+
+    const source: SourceConfig = {
+      id: 'test-source',
+      name: 'Test Source',
+      rssUrl: 'https://example.com/rss.xml',
+      tier: 1,
+      reliability: 'stable',
+      fetchMethod: 'rss',
+    };
+
+    const articles = await fetchSourceArticles(source);
+    expect(articles[0].title).toBe("'국가통합바이오빅데이터구축사업단' 대학생 홍보 서포터즈 2기 발대식");
   });
 
   it('sends a browser User-Agent header when requiresBrowserUA is set', async () => {

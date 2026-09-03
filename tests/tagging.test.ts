@@ -35,4 +35,16 @@ describe('matchTags', () => {
     const result = matchTags('국민건강보험공단 언더라이팅 데이터 활용');
     expect(result.tags).toContain('언더라이팅');
   });
+
+  it('excludeKeywords prevents a known false-positive substring from matching', () => {
+    const cancerTag: TagDefinition[] = [{ tag: '암', keywords: ['암'], excludeKeywords: ['암호'] }];
+    const result = matchTags('티빙, 접속키 암호화 안해…계정 정보 유출', cancerTag);
+    expect(result.tags).toEqual([]);
+  });
+
+  it('excludeKeywords does not suppress a genuine match elsewhere in the same text', () => {
+    const cancerTag: TagDefinition[] = [{ tag: '암', keywords: ['암'], excludeKeywords: ['암호'] }];
+    const result = matchTags('암호화 기술 도입 논의 중, 암 환자 치료비 지원 확대', cancerTag);
+    expect(result.tags).toEqual(['암']);
+  });
 });

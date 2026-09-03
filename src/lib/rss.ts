@@ -19,6 +19,26 @@ function parseDate(raw?: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Some feeds double-escape HTML entities (e.g. "&amp;apos;" in the source XML
+// decodes once, via the XML parser, to the literal text "&apos;" rather than
+// an actual apostrophe). Run a second pass over the common named/numeric
+// entities so titles/snippets never show raw entity text on screen.
+const HTML_ENTITIES: Record<string, string> = {
+  '&apos;': "'",
+  '&quot;': '"',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&nbsp;': ' ',
+};
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&(apos|quot|amp|lt|gt|nbsp);/g, (match) => HTML_ENTITIES[match])
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
 export async function fetchSourceArticles(source: SourceConfig): Promise<RawArticle[]> {
   const headers: Record<string, string> = {};
   if (source.requiresBrowserUA) {
@@ -45,10 +65,10 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
     }
 
     results.push({
-      title: item.title.trim(),
+      title: decodeHtmlEntities(item.title.trim()),
       url,
       publishedAt: parseDate(item.isoDate) ?? parseDate(item.pubDate),
-      snippet: (item.contentSnippet || item.content || '').slice(0, 500),
+      snippet: decodeHtmlEntities((item.contentSnippet || item.content || '').slice(0, 500)),
     });
   }
   return results;

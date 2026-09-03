@@ -1,14 +1,26 @@
-import { getRecentArticles, type PriorityFilter } from '@/lib/db';
+import { getRecentArticles, getCollectionDates, getLastCollectedAt, type PriorityFilter } from '@/lib/db';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
+import type { FilterSelectOption } from '@/components/FilterSelect';
 
 const PAGE_SIZE = 50;
-const VALID_PRIORITIES: PriorityFilter[] = ['high', 'medium', 'low'];
+const VALID_PRIORITIES: PriorityFilter[] = ['high', 'medium', 'low', 'all'];
+
+function formatKstDate(dateStr: string): string {
+  // noon avoids any DST/boundary edge cases when formatting a bare calendar date
+  return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
 
 export default async function HomePage({
   searchParams,
 }: {
   searchParams: Promise<{
+    date?: string;
     tier?: string;
     priority?: string;
     sourceId?: string;
@@ -24,18 +36,33 @@ export default async function HomePage({
     : undefined;
   const page = params.page ? Math.max(1, Number(params.page) || 1) : 1;
 
-  const { articles, hasNextPage } = await getRecentArticles({
-    tier,
-    priority,
-    sourceId: params.sourceId || undefined,
-    tag: params.tag || undefined,
-    search: params.search || undefined,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
-  });
+  const collectionDates = await getCollectionDates();
+  const latestDate = collectionDates[0];
+  // no `date` param -> default to the latest collection batch; `all-time` -> no date constraint
+  const collectedDate = params.date === 'all-time' ? undefined : (params.date ?? latestDate);
+
+  const [{ articles, hasNextPage }, lastCollectedAt] = await Promise.all([
+    getRecentArticles({
+      tier,
+      priority,
+      sourceId: params.sourceId || undefined,
+      tag: params.tag || undefined,
+      search: params.search || undefined,
+      collectedDate,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    getLastCollectedAt(),
+  ]);
+
+  const dateOptions: FilterSelectOption[] = collectionDates.map((d, i) => ({
+    value: d,
+    label: `${formatKstDate(d)}${i === 0 ? ' (최신)' : ''}`,
+  }));
 
   function buildPageHref(targetPage: number): string {
     const query = new URLSearchParams();
+    if (params.date) query.set('date', params.date);
     if (params.tier) query.set('tier', params.tier);
     if (params.priority) query.set('priority', params.priority);
     if (params.sourceId) query.set('sourceId', params.sourceId);
@@ -46,11 +73,26 @@ export default async function HomePage({
     return qs ? `/?${qs}` : '/';
   }
 
+  const basisLabel = !collectedDate
+    ? '전체 기간'
+    : collectedDate === latestDate && lastCollectedAt
+      ? `${formatKstDate(collectedDate)} · ${lastCollectedAt.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })} 수집`
+      : `${formatKstDate(collectedDate)} 수집분`;
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Healthcare Intelligence Radar</h1>
-      <p className="text-muted-foreground mt-1 mb-6 text-sm">보험사 헬스케어 관점 뉴스 센싱 대시보드</p>
-      <FilterBar tier={tier} priority={priority} sourceId={params.sourceId} tag={params.tag} search={params.search} />
+      <p className="text-muted-foreground mt-1 mb-1 text-sm">보험사 헬스케어 관점 뉴스 센싱 대시보드</p>
+      <p className="text-muted-foreground mb-6 text-xs">{basisLabel} 기준 조회</p>
+      <FilterBar
+        tier={tier}
+        priority={priority}
+        sourceId={params.sourceId}
+        date={params.date}
+        dateOptions={dateOptions}
+        tag={params.tag}
+        search={params.search}
+      />
       <div className="overflow-hidden rounded-lg border">
         <ArticleList articles={articles} page={page} hasNextPage={hasNextPage} buildPageHref={buildPageHref} />
       </div>

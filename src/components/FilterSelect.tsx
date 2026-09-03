@@ -22,6 +22,11 @@ export interface FilterSelectGroup {
   options: FilterSelectOption[];
 }
 
+// Sentinel for "no filter selected" (clears the query param). Distinct from
+// any real option value so a filter can define its own explicit "show
+// everything" option (e.g. priority's "all" is a real value, not this clear).
+const CLEAR_VALUE = '__clear__';
+
 export function FilterSelect({
   paramName,
   currentValue,
@@ -37,15 +42,13 @@ export function FilterSelect({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const value = currentValue ?? 'all';
+  const value = currentValue ?? CLEAR_VALUE;
 
-  const currentLabel = groups
-    .flatMap((g) => g.options)
-    .find((o) => o.value === value)?.label ?? allLabel;
+  const currentLabel = groups.flatMap((g) => g.options).find((o) => o.value === value)?.label ?? allLabel;
 
   function handleChange(next: string | null) {
     const params = new URLSearchParams(searchParams.toString());
-    if (!next || next === 'all') {
+    if (!next || next === CLEAR_VALUE) {
       params.delete(paramName);
     } else {
       params.set(paramName, next);
@@ -60,7 +63,7 @@ export function FilterSelect({
         <SelectValue placeholder={allLabel}>{currentLabel}</SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">{allLabel}</SelectItem>
+        <SelectItem value={CLEAR_VALUE}>{allLabel}</SelectItem>
         {groups.map((group, i) => (
           <SelectGroup key={group.label ?? i}>
             {group.label && (

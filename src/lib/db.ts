@@ -59,7 +59,7 @@ export interface ArticleRow {
   score: number;
 }
 
-export type PriorityFilter = 'high' | 'medium' | 'low';
+export type PriorityFilter = 'high' | 'medium' | 'low' | 'all';
 
 export interface ArticleFilters {
   tier?: 1 | 2 | 3;
@@ -67,8 +67,17 @@ export interface ArticleFilters {
   tag?: string;
   sourceId?: string;
   search?: string;
+  /** a KST calendar date as 'YYYY-MM-DD', restricting to that day's collection batch (collected_at) */
+  collectedDate?: string;
   limit?: number;
   offset?: number;
+}
+
+/** [start, end) UTC instants bracketing the given KST calendar date */
+function kstDayRange(dateStr: string): [Date, Date] {
+  const start = new Date(`${dateStr}T00:00:00+09:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return [start, end];
 }
 
 function rowToArticle(r: any): ArticleRow {
@@ -97,14 +106,23 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
   const conditions: any[] = [];
   if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
-  if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
-  if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
-  if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
+  // Tier 1's unconditional storage policy means a lot of score=0 rows are
+  // unrelated public-agency notices (bus schedules, unrelated announcements).
+  // Default to hiding them unless the caller explicitly asks for 'all' or 'low'.
+  if (!filters.priority) conditions.push(sql`a.score >= 1`);
+  else if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
+  else if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
+  else if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
+  // filters.priority === 'all' -> no score condition, show everything
   if (filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
   if (filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
   if (filters.search) {
     const pattern = `%${filters.search}%`;
     conditions.push(sql`(a.title ilike ${pattern} or a.content_snippet ilike ${pattern})`);
+  }
+  if (filters.collectedDate) {
+    const [dayStart, dayEnd] = kstDayRange(filters.collectedDate);
+    conditions.push(sql`a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`);
   }
 
   let where: any = sql``;
@@ -127,6 +145,27 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   `;
   const hasNextPage = rows.length > limit;
   return { articles: rows.slice(0, limit).map(rowToArticle), hasNextPage };
+}
+
+/** distinct KST calendar dates ('YYYY-MM-DD') that have at least one collected article, most recent first */
+export async function getCollectionDates(limit = 60): Promise<string[]> {
+  const rows = await sql`
+    select distinct (collected_at at time zone 'Asia/Seoul')::date as d
+    from articles
+    order by d desc
+    limit ${limit}
+  `;
+  return rows.map((r: any) => {
+    const d: Date = r.d;
+    // postgres.js returns DATE columns as a Date at UTC midnight for that calendar day
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+/** the exact timestamp of the most recent collection run, or null if nothing has been collected yet */
+export async function getLastCollectedAt(): Promise<Date | null> {
+  const rows = await sql`select max(collected_at) as latest from articles`;
+  return rows[0]?.latest ?? null;
 }
 
 export async function getArticleById(id: number): Promise<ArticleRow | null> {
