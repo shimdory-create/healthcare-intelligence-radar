@@ -19,7 +19,7 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
     headers['User-Agent'] = BROWSER_USER_AGENT;
   }
 
-  const res = await fetch(source.rssUrl, { headers });
+  const res = await fetch(source.rssUrl, { headers, signal: AbortSignal.timeout(15000) });
   if (!res.ok) {
     throw new Error(`fetch failed for ${source.id}: HTTP ${res.status}`);
   }
@@ -50,7 +50,7 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
 
 export async function resolveGoogleNewsUrl(redirectUrl: string): Promise<string | null> {
   try {
-    const res = await fetch(redirectUrl, { redirect: 'follow' });
+    const res = await fetch(redirectUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     if (res.url && res.url !== redirectUrl) return res.url;
     return null;
