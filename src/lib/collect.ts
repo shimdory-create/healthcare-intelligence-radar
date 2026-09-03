@@ -66,9 +66,5 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
 }
 
 export async function collectAll(): Promise<CollectionSummary[]> {
-  const summaries: CollectionSummary[] = [];
-  for (const source of SOURCES) {
-    summaries.push(await collectSource(source));
-  }
-  return summaries;
+  return Promise.all(SOURCES.map((source) => collectSource(source)));
 }
