@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { FilterSelect, type FilterSelectOption } from './FilterSelect';
+import { FilterSelect } from './FilterSelect';
+import { DateNav } from './DateNav';
 import { SOURCES } from '@/lib/sources.config';
 
 const TIER_GROUPS = [
@@ -39,36 +40,39 @@ export function FilterBar({
   tier,
   priority,
   sourceId,
-  date,
-  dateOptions,
+  currentDate,
+  latestDate,
+  isAllTime,
   tag,
   search,
 }: {
   tier?: number;
   priority?: string;
   sourceId?: string;
-  date?: string;
-  dateOptions: FilterSelectOption[];
+  currentDate: string;
+  latestDate: string;
+  isAllTime: boolean;
   tag?: string;
   search?: string;
 }) {
-  const dateGroups = [{ options: [{ value: 'all-time', label: '전체 기간' }, ...dateOptions] }];
-
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-2">
-      <FilterSelect paramName="date" currentValue={date} allLabel="최신 수집분 (기본)" groups={dateGroups} className="w-[200px]" />
-      <FilterSelect paramName="tier" currentValue={tier ? String(tier) : undefined} allLabel="전체 티어" groups={TIER_GROUPS} className="w-[170px]" />
-      <FilterSelect paramName="priority" currentValue={priority} allLabel="참고 제외 (기본)" groups={PRIORITY_GROUPS} className="w-[160px]" />
-      <FilterSelect paramName="sourceId" currentValue={sourceId} allLabel="전체 출처" groups={SOURCE_GROUPS} className="w-[190px]" />
-      <form method="get" className="flex flex-wrap items-center gap-2">
-        {date && <input type="hidden" name="date" value={date} />}
-        {tier && <input type="hidden" name="tier" value={tier} />}
-        {priority && <input type="hidden" name="priority" value={priority} />}
-        {sourceId && <input type="hidden" name="sourceId" value={sourceId} />}
-        <Input name="tag" defaultValue={tag ?? ''} placeholder="태그 (예: GLP-1)" className="w-[180px]" />
-        <Input name="search" defaultValue={search ?? ''} placeholder="검색어" className="w-[200px]" />
-        <Button type="submit">조회</Button>
-      </form>
+    <div className="mb-6 flex flex-col gap-3">
+      <DateNav currentDate={currentDate} latestDate={latestDate} isAllTime={isAllTime} />
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect paramName="tier" currentValue={tier ? String(tier) : undefined} allLabel="전체 티어" groups={TIER_GROUPS} className="w-[170px]" />
+        <FilterSelect paramName="priority" currentValue={priority} allLabel="참고 제외 (기본)" groups={PRIORITY_GROUPS} className="w-[160px]" />
+        <FilterSelect paramName="sourceId" currentValue={sourceId} allLabel="전체 출처" groups={SOURCE_GROUPS} className="w-[190px]" />
+        <form method="get" className="flex flex-wrap items-center gap-2">
+          {!isAllTime && currentDate !== latestDate && <input type="hidden" name="date" value={currentDate} />}
+          {isAllTime && <input type="hidden" name="date" value="all-time" />}
+          {tier && <input type="hidden" name="tier" value={tier} />}
+          {priority && <input type="hidden" name="priority" value={priority} />}
+          {sourceId && <input type="hidden" name="sourceId" value={sourceId} />}
+          <Input name="tag" defaultValue={tag ?? ''} placeholder="태그 (예: GLP-1)" className="w-[180px]" />
+          <Input name="search" defaultValue={search ?? ''} placeholder="검색어" className="w-[200px]" />
+          <Button type="submit">조회</Button>
+        </form>
+      </div>
     </div>
   );
 }

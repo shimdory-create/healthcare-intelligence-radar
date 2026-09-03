@@ -147,19 +147,11 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   return { articles: rows.slice(0, limit).map(rowToArticle), hasNextPage };
 }
 
-/** distinct KST calendar dates ('YYYY-MM-DD') that have at least one collected article, most recent first */
-export async function getCollectionDates(limit = 60): Promise<string[]> {
-  const rows = await sql`
-    select distinct (collected_at at time zone 'Asia/Seoul')::date as d
-    from articles
-    order by d desc
-    limit ${limit}
-  `;
-  return rows.map((r: any) => {
-    const d: Date = r.d;
-    // postgres.js returns DATE columns as a Date at UTC midnight for that calendar day
-    return d.toISOString().slice(0, 10);
-  });
+/** the most recent KST calendar date ('YYYY-MM-DD') that has at least one collected article, or null if empty */
+export async function getLatestCollectionDate(): Promise<string | null> {
+  const rows = await sql`select max((collected_at at time zone 'Asia/Seoul')::date) as d from articles`;
+  const d: Date | null = rows[0]?.d ?? null;
+  return d ? d.toISOString().slice(0, 10) : null;
 }
 
 /** the exact timestamp of the most recent collection run, or null if nothing has been collected yet */

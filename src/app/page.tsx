@@ -1,7 +1,6 @@
-import { getRecentArticles, getCollectionDates, getLastCollectedAt, type PriorityFilter } from '@/lib/db';
+import { getRecentArticles, getLatestCollectionDate, getLastCollectedAt, type PriorityFilter } from '@/lib/db';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
-import type { FilterSelectOption } from '@/components/FilterSelect';
 
 const PAGE_SIZE = 50;
 const VALID_PRIORITIES: PriorityFilter[] = ['high', 'medium', 'low', 'all'];
@@ -36,10 +35,10 @@ export default async function HomePage({
     : undefined;
   const page = params.page ? Math.max(1, Number(params.page) || 1) : 1;
 
-  const collectionDates = await getCollectionDates();
-  const latestDate = collectionDates[0];
+  const latestDate = (await getLatestCollectionDate()) ?? new Date().toISOString().slice(0, 10);
+  const isAllTime = params.date === 'all-time';
   // no `date` param -> default to the latest collection batch; `all-time` -> no date constraint
-  const collectedDate = params.date === 'all-time' ? undefined : (params.date ?? latestDate);
+  const collectedDate = isAllTime ? undefined : (params.date ?? latestDate);
 
   const [{ articles, hasNextPage }, lastCollectedAt] = await Promise.all([
     getRecentArticles({
@@ -55,11 +54,6 @@ export default async function HomePage({
     getLastCollectedAt(),
   ]);
 
-  const dateOptions: FilterSelectOption[] = collectionDates.map((d, i) => ({
-    value: d,
-    label: `${formatKstDate(d)}${i === 0 ? ' (최신)' : ''}`,
-  }));
-
   function buildPageHref(targetPage: number): string {
     const query = new URLSearchParams();
     if (params.date) query.set('date', params.date);
@@ -73,23 +67,24 @@ export default async function HomePage({
     return qs ? `/?${qs}` : '/';
   }
 
-  const basisLabel = !collectedDate
+  const basisLabel = isAllTime
     ? '전체 기간'
     : collectedDate === latestDate && lastCollectedAt
       ? `${formatKstDate(collectedDate)} · ${lastCollectedAt.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })} 수집`
-      : `${formatKstDate(collectedDate)} 수집분`;
+      : `${formatKstDate(collectedDate!)} 수집분`;
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Healthcare Intelligence Radar</h1>
       <p className="text-muted-foreground mt-1 mb-1 text-sm">보험사 헬스케어 관점 뉴스 센싱 대시보드</p>
-      <p className="text-muted-foreground mb-6 text-xs">{basisLabel} 기준 조회</p>
+      <p className="text-muted-foreground mb-4 text-xs">{basisLabel} 기준 조회</p>
       <FilterBar
         tier={tier}
         priority={priority}
         sourceId={params.sourceId}
-        date={params.date}
-        dateOptions={dateOptions}
+        currentDate={collectedDate ?? latestDate}
+        latestDate={latestDate}
+        isAllTime={isAllTime}
         tag={params.tag}
         search={params.search}
       />

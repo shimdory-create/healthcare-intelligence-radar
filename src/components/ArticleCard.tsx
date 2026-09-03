@@ -2,25 +2,27 @@ import Link from 'next/link';
 import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { sourceDisplayName } from '@/lib/sourceLookup';
+import { sourceDisplayName, TIER_LABELS } from '@/lib/sourceLookup';
 import type { ArticleRow } from '@/lib/db';
 
 export function ArticleCard({ article }: { article: ArticleRow }) {
   return (
     <TableRow>
       <TableCell className="text-center">
-        <Badge variant="outline">T{article.tier}</Badge>
+        <PriorityBadge score={article.score} />
       </TableCell>
       <TableCell className="text-center">
-        <PriorityBadge score={article.score} />
+        <Badge variant="outline" className="whitespace-nowrap">
+          {TIER_LABELS[article.tier]}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-center text-sm whitespace-nowrap">
+        {sourceDisplayName(article.sourceId)}
       </TableCell>
       <TableCell className="max-w-[420px] whitespace-normal">
         <Link href={`/article/${article.id}`} className="font-medium hover:underline">
           {article.title}
         </Link>
-      </TableCell>
-      <TableCell className="text-muted-foreground text-center text-sm whitespace-nowrap">
-        {sourceDisplayName(article.sourceId)}
       </TableCell>
       <TableCell className="whitespace-normal">
         <div className="flex flex-wrap justify-center gap-1">
