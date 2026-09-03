@@ -12,9 +12,7 @@ export function ArticleCard({ article }: { article: ArticleRow }) {
         <PriorityBadge score={article.score} />
       </TableCell>
       <TableCell className="text-center">
-        <Badge variant="outline" className="whitespace-normal text-center leading-tight">
-          {TIER_LABELS[article.tier]}
-        </Badge>
+        <Badge variant="outline">{TIER_LABELS[article.tier]}</Badge>
       </TableCell>
       <TableCell className="text-muted-foreground text-center text-sm whitespace-normal">
         {sourceDisplayName(article.sourceId)}

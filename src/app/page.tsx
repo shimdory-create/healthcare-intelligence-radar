@@ -80,7 +80,7 @@ export default async function HomePage({
       <Link href="/" className="inline-block">
         <h1 className="text-2xl font-semibold tracking-tight hover:underline">헬스케어 심텔리전스 레이더</h1>
       </Link>
-      <p className="text-muted-foreground mt-1 mb-1 text-sm">헬스케어 관점 뉴스 센싱 대시보드</p>
+      <p className="text-muted-foreground mt-1 mb-1 text-sm">보도자료/뉴스 센싱 대시보드</p>
       <p className="text-muted-foreground mb-4 text-xs">
         {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low})
       </p>
