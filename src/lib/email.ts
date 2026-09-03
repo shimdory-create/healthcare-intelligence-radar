@@ -1,5 +1,5 @@
 import type { ArticleRow, PriorityCounts } from './db';
-import { sourceDisplayName } from './sourceLookup';
+import { sourceDisplayName, TIER_LABELS } from './sourceLookup';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -43,7 +43,7 @@ export function buildDigestHtml(
     .map(
       (a) => `
     <div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px 12px;margin:0 0 8px;">
-      <p style="margin:0 0 4px;font-size:12px;color:#666;">${priorityLabel(a.score)} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
+      <p style="margin:0 0 4px;font-size:12px;color:#666;">${priorityLabel(a.score)} · ${TIER_LABELS[a.tier]} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
       <a href="${escapeHtml(a.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(a.title)}</a>
       ${tagsHtml(a.tags)}
     </div>`,
@@ -55,6 +55,11 @@ export function buildDigestHtml(
       <h2 style="margin-bottom:4px;">헬스케어 심텔리전스 레이더</h2>
       <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
       <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
+      <p style="margin:0 0 16px;font-size:11px;color:#999;line-height:1.5;">
+        추출 기준: 키워드에 매칭된 기사만 수집 (공공기관/Tier 1 자료는 매칭 여부와 무관하게 모두 수집)<br />
+        정렬 기준: 우선순위 높은 순 → 최신순<br />
+        우선순위 기준: 매칭된 태그 개수 - 3개 이상 🔴 높음, 1~2개 🟡 보통, 0개 ⚪ 참고
+      </p>
       ${cards}
     </div>`;
 }
