@@ -1,5 +1,14 @@
 import Link from 'next/link';
-import { getRecentArticles, getLatestCollectionDate, getLastCollectedAt, getPriorityCounts, type PriorityFilter } from '@/lib/db';
+import {
+  getRecentArticles,
+  getArticlesTotalCount,
+  getAvailableFacets,
+  getLatestCollectionDate,
+  getLastCollectedAt,
+  getPriorityCounts,
+  type ArticleFilters,
+  type PriorityFilter,
+} from '@/lib/db';
 import { formatKstDate } from '@/lib/dateFormat';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
@@ -32,20 +41,23 @@ export default async function HomePage({
   // no `date` param -> default to the latest collection batch; `all-time` -> no date constraint
   const collectedDate = isAllTime ? undefined : (params.date ?? latestDate);
 
-  const [{ articles, hasNextPage }, lastCollectedAt, counts] = await Promise.all([
-    getRecentArticles({
-      tier,
-      priority,
-      sourceId: params.sourceId || undefined,
-      tag: params.tag || undefined,
-      search: params.search || undefined,
-      collectedDate,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    }),
+  const filters: ArticleFilters = {
+    tier,
+    priority,
+    sourceId: params.sourceId || undefined,
+    tag: params.tag || undefined,
+    search: params.search || undefined,
+    collectedDate,
+  };
+
+  const [{ articles, hasNextPage }, totalCount, facets, lastCollectedAt, counts] = await Promise.all([
+    getRecentArticles({ ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+    getArticlesTotalCount(filters),
+    getAvailableFacets(filters),
     getLastCollectedAt(),
     getPriorityCounts(collectedDate),
   ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   function buildPageHref(targetPage: number): string {
     const query = new URLSearchParams();
@@ -84,9 +96,16 @@ export default async function HomePage({
         isAllTime={isAllTime}
         tag={params.tag}
         search={params.search}
+        facets={facets}
       />
       <div className="overflow-hidden rounded-lg border">
-        <ArticleList articles={articles} page={page} hasNextPage={hasNextPage} buildPageHref={buildPageHref} />
+        <ArticleList
+          articles={articles}
+          page={page}
+          totalPages={totalPages}
+          hasNextPage={hasNextPage}
+          buildPageHref={buildPageHref}
+        />
       </div>
     </main>
   );

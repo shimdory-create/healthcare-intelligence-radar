@@ -8,11 +8,13 @@ import type { ArticleRow } from '@/lib/db';
 export function ArticleList({
   articles,
   page,
+  totalPages,
   hasNextPage,
   buildPageHref,
 }: {
   articles: ArticleRow[];
   page: number;
+  totalPages: number;
   hasNextPage: boolean;
   buildPageHref: (page: number) => string;
 }) {
@@ -49,7 +51,17 @@ export function ArticleList({
             이전
           </span>
         )}
-        <span className="text-muted-foreground px-2 text-sm">{page} 페이지</span>
+        {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((n) =>
+          n === page ? (
+            <span key={n} className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'pointer-events-none')}>
+              {n}
+            </span>
+          ) : (
+            <Link key={n} href={buildPageHref(n)} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+              {n}
+            </Link>
+          ),
+        )}
         {hasNextPage ? (
           <Link href={buildPageHref(page + 1)} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
             다음

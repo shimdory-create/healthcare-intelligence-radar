@@ -6,3 +6,4 @@ next-env.d.ts
 .superpowers
 .vercel
 tsconfig.tsbuildinfo
+.claude/scheduled_tasks.lock

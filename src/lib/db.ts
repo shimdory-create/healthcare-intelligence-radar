@@ -100,34 +100,45 @@ export interface ArticlePage {
   hasNextPage: boolean;
 }
 
-export async function getRecentArticles(filters: ArticleFilters = {}): Promise<ArticlePage> {
-  const limit = filters.limit ?? 50;
-  const offset = filters.offset ?? 0;
-  // postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately
+type FacetField = 'tier' | 'priority' | 'tag' | 'sourceId' | 'search' | 'collectedDate';
+
+// postgres.js fragment types don't compose cleanly through an array, so `any` is used here deliberately.
+// `exclude` omits one facet's own condition -- used to compute "what values remain available"
+// for that facet's dropdown given every OTHER active filter (standard faceted-search semantics).
+function buildConditions(filters: ArticleFilters, exclude?: FacetField): any[] {
   const conditions: any[] = [];
-  if (filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
-  // no priority filter -> show every score band; sorting already puts higher-priority rows first
-  if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
-  else if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
-  else if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
-  if (filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
-  if (filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
-  if (filters.search) {
+  if (exclude !== 'tier' && filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
+  if (exclude !== 'priority') {
+    if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
+    else if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
+    else if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
+  }
+  if (exclude !== 'tag' && filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
+  if (exclude !== 'sourceId' && filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
+  if (exclude !== 'search' && filters.search) {
     const pattern = `%${filters.search}%`;
     conditions.push(sql`(a.title ilike ${pattern} or a.content_snippet ilike ${pattern})`);
   }
-  if (filters.collectedDate) {
+  if (exclude !== 'collectedDate' && filters.collectedDate) {
     const [dayStart, dayEnd] = kstDayRange(filters.collectedDate);
     conditions.push(sql`a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`);
   }
+  return conditions;
+}
 
-  let where: any = sql``;
-  if (conditions.length > 0) {
-    where = sql`where ${conditions[0]}`;
-    for (let i = 1; i < conditions.length; i++) {
-      where = sql`${where} and ${conditions[i]}`;
-    }
+function buildWhere(conditions: any[]): any {
+  if (conditions.length === 0) return sql``;
+  let where = sql`where ${conditions[0]}`;
+  for (let i = 1; i < conditions.length; i++) {
+    where = sql`${where} and ${conditions[i]}`;
   }
+  return where;
+}
+
+export async function getRecentArticles(filters: ArticleFilters = {}): Promise<ArticlePage> {
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+  const where = buildWhere(buildConditions(filters));
 
   // fetch one extra row to detect whether a next page exists, without a separate count query
   const rows = await sql`
@@ -143,11 +154,89 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   return { articles: rows.slice(0, limit).map(rowToArticle), hasNextPage };
 }
 
+/** total matching rows for the given filters -- used only to size numbered pagination */
+export async function getArticlesTotalCount(filters: ArticleFilters = {}): Promise<number> {
+  const where = buildWhere(buildConditions(filters));
+  const rows = await sql`
+    select count(*)::int as n
+    from articles a
+    join sources s on s.id = a.source_id
+    ${where}
+  `;
+  return rows[0]?.n ?? 0;
+}
+
+export interface AvailableFacets {
+  priorities: ('high' | 'medium' | 'low')[];
+  tiers: number[];
+  sourceIds: string[];
+  tags: string[];
+}
+
+/** for each facet, which values still have at least one matching row once every OTHER active
+ *  filter is applied -- lets the UI hide dropdown options that would return zero results.
+ *  Issued as a single UNION ALL query (rather than 4 parallel ones) to keep this cheap on the
+ *  connection pool -- a page render already opens several other connections alongside it. */
+export async function getAvailableFacets(filters: ArticleFilters): Promise<AvailableFacets> {
+  const priorityWhere = buildWhere(buildConditions(filters, 'priority'));
+  const tierWhere = buildWhere(buildConditions(filters, 'tier'));
+  const sourceWhere = buildWhere(buildConditions(filters, 'sourceId'));
+  const tagWhere = buildWhere(buildConditions(filters, 'tag'));
+
+  const rows = await sql`
+    select 'priority' as kind, (case when a.score >= 3 then 'high' when a.score >= 1 then 'medium' else 'low' end) as value
+    from articles a
+    join sources s on s.id = a.source_id
+    ${priorityWhere}
+    union all
+    select 'tier', s.tier::text
+    from articles a
+    join sources s on s.id = a.source_id
+    ${tierWhere}
+    union all
+    select 'source', a.source_id
+    from articles a
+    join sources s on s.id = a.source_id
+    ${sourceWhere}
+    union all
+    select 'tag', t
+    from articles a
+    join sources s on s.id = a.source_id
+    cross join lateral unnest(a.tags) as t
+    ${tagWhere}
+  `;
+
+  const facets: AvailableFacets = { priorities: [], tiers: [], sourceIds: [], tags: [] };
+  for (const r of rows as any[]) {
+    if (r.kind === 'priority' && !facets.priorities.includes(r.value)) facets.priorities.push(r.value);
+    else if (r.kind === 'tier' && !facets.tiers.includes(Number(r.value))) facets.tiers.push(Number(r.value));
+    else if (r.kind === 'source' && !facets.sourceIds.includes(r.value)) facets.sourceIds.push(r.value);
+    else if (r.kind === 'tag' && !facets.tags.includes(r.value)) facets.tags.push(r.value);
+  }
+  return facets;
+}
+
 /** the most recent KST calendar date ('YYYY-MM-DD') that has at least one collected article, or null if empty */
 export async function getLatestCollectionDate(): Promise<string | null> {
   const rows = await sql`select max((collected_at at time zone 'Asia/Seoul')::date) as d from articles`;
   const d: Date | null = rows[0]?.d ?? null;
   return d ? d.toISOString().slice(0, 10) : null;
+}
+
+/** KST calendar dates ('YYYY-MM-DD') within the given month that have at least one collected article.
+ *  Scoped to a single month (not the whole table) so the query stays cheap and bounded no matter
+ *  how much history accumulates -- callers fetch one month at a time as the calendar navigates. */
+export async function getCollectionDatesInMonth(monthStr: string): Promise<string[]> {
+  const [year, month] = monthStr.split('-').map(Number);
+  const start = new Date(`${monthStr}-01T00:00:00+09:00`);
+  const nextMonth = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`;
+  const end = new Date(`${nextMonth}-01T00:00:00+09:00`);
+  const rows = await sql`
+    select distinct (collected_at at time zone 'Asia/Seoul')::date as d
+    from articles
+    where collected_at >= ${start} and collected_at < ${end}
+  `;
+  return rows.map((r: any) => (r.d as Date).toISOString().slice(0, 10));
 }
 
 /** the exact timestamp of the most recent collection run, or null if nothing has been collected yet */
