@@ -12,14 +12,14 @@ export function ArticleCard({ article }: { article: ArticleRow }) {
         <PriorityBadge score={article.score} />
       </TableCell>
       <TableCell className="text-center">
-        <Badge variant="outline" className="whitespace-nowrap">
+        <Badge variant="outline" className="whitespace-normal text-center leading-tight">
           {TIER_LABELS[article.tier]}
         </Badge>
       </TableCell>
-      <TableCell className="text-muted-foreground text-center text-sm whitespace-nowrap">
+      <TableCell className="text-muted-foreground text-center text-sm whitespace-normal">
         {sourceDisplayName(article.sourceId)}
       </TableCell>
-      <TableCell className="max-w-[420px] whitespace-normal">
+      <TableCell className="whitespace-normal">
         <Link href={`/article/${article.id}`} className="font-medium hover:underline">
           {article.title}
         </Link>

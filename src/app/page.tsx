@@ -1,4 +1,5 @@
-import { getRecentArticles, getLatestCollectionDate, getLastCollectedAt, type PriorityFilter } from '@/lib/db';
+import Link from 'next/link';
+import { getRecentArticles, getLatestCollectionDate, getLastCollectedAt, getPriorityCounts, type PriorityFilter } from '@/lib/db';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
 
@@ -40,7 +41,7 @@ export default async function HomePage({
   // no `date` param -> default to the latest collection batch; `all-time` -> no date constraint
   const collectedDate = isAllTime ? undefined : (params.date ?? latestDate);
 
-  const [{ articles, hasNextPage }, lastCollectedAt] = await Promise.all([
+  const [{ articles, hasNextPage }, lastCollectedAt, counts] = await Promise.all([
     getRecentArticles({
       tier,
       priority,
@@ -52,6 +53,7 @@ export default async function HomePage({
       offset: (page - 1) * PAGE_SIZE,
     }),
     getLastCollectedAt(),
+    getPriorityCounts(collectedDate),
   ]);
 
   function buildPageHref(targetPage: number): string {
@@ -75,9 +77,13 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Healthcare Intelligence Radar</h1>
-      <p className="text-muted-foreground mt-1 mb-1 text-sm">보험사 헬스케어 관점 뉴스 센싱 대시보드</p>
-      <p className="text-muted-foreground mb-4 text-xs">{basisLabel} 기준 조회</p>
+      <Link href="/" className="inline-block">
+        <h1 className="text-2xl font-semibold tracking-tight hover:underline">헬스케어 심텔리전스 레이더</h1>
+      </Link>
+      <p className="text-muted-foreground mt-1 mb-1 text-sm">헬스케어 관점 뉴스 센싱 대시보드</p>
+      <p className="text-muted-foreground mb-4 text-xs">
+        {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low})
+      </p>
       <FilterBar
         tier={tier}
         priority={priority}

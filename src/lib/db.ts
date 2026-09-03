@@ -160,6 +160,33 @@ export async function getLastCollectedAt(): Promise<Date | null> {
   return rows[0]?.latest ?? null;
 }
 
+export interface PriorityCounts {
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+/** counts by priority band for a given collected date (KST), or across all time if omitted --
+ *  intentionally ignores tier/source/tag/search so it reads as "today's collection batch", not a filtered subset */
+export async function getPriorityCounts(collectedDate?: string): Promise<PriorityCounts> {
+  let where: any = sql``;
+  if (collectedDate) {
+    const [dayStart, dayEnd] = kstDayRange(collectedDate);
+    where = sql`where a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`;
+  }
+  const rows = await sql`
+    select
+      count(*)::int as total,
+      count(*) filter (where a.score >= 3)::int as high,
+      count(*) filter (where a.score between 1 and 2)::int as medium,
+      count(*) filter (where a.score = 0)::int as low
+    from articles a
+    ${where}
+  `;
+  return rows[0] as PriorityCounts;
+}
+
 export async function getArticleById(id: number): Promise<ArticleRow | null> {
   const rows = await sql`
     select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score

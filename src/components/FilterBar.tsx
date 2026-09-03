@@ -57,7 +57,10 @@ export function FilterBar({
 }) {
   return (
     <div className="mb-6 flex flex-col gap-3">
-      <DateNav currentDate={currentDate} latestDate={latestDate} isAllTime={isAllTime} />
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">수집일</span>
+        <DateNav currentDate={currentDate} latestDate={latestDate} isAllTime={isAllTime} />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <FilterSelect paramName="tier" currentValue={tier ? String(tier) : undefined} allLabel="전체 티어" groups={TIER_GROUPS} className="w-[170px]" />
         <FilterSelect paramName="priority" currentValue={priority} allLabel="참고 제외 (기본)" groups={PRIORITY_GROUPS} className="w-[160px]" />
