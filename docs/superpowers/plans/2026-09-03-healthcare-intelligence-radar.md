@@ -16,7 +16,7 @@
 - Personal single-user tool: dashboard-only, no email/notifications, no sharing (spec §2).
 - Tier 1 sources (공공기관) are stored unconditionally; Tier 2/3 sources are stored **only if at least one tag matched** (spec §7).
 - Dedup: `articles.url` has a DB unique constraint, plus a same-calendar-day normalized-title match check before insert (spec §6).
-- Every source's fetch runs in its own try/catch — one failing source must never block or fail collection for the other 21 (spec §3, §8).
+- Every source's fetch runs in its own try/catch — one failing source must never block or fail collection for the other 22 (spec §3, §8).
 - 보건복지부 must be fetched via its RSS URL only — its robots.txt disallows scraping the HTML board pages directly (spec §5).
 - 매일경제's feed is behind Cloudflare and requires a normal browser `User-Agent` header on the fetch (spec §5).
 - 중앙일보 has no native RSS; it is fetched via a Google News RSS search scoped to its domain, flagged `reliability: experimental`, with per-article redirect resolution that skips (not fails) on error (spec §8).
