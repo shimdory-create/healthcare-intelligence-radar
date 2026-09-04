@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getArticleById } from '@/lib/db';
+import { getArticleById, getAiAnalysis } from '@/lib/db';
 import { sourceDisplayName } from '@/lib/sourceLookup';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
   }
   const article = await getArticleById(numericId);
   if (!article) notFound();
+  const analysis = await getAiAnalysis(numericId);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
@@ -56,6 +57,32 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
           </a>
         </CardContent>
       </Card>
+      {analysis && (
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">AI 분석</CardTitle>
+              {!analysis.relevant && <Badge variant="outline">관련성 낮음</Badge>}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm leading-relaxed">{analysis.summary}</p>
+            {analysis.implications.length > 0 && (
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {analysis.implications.map((point, i) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            )}
+            {analysis.watchPoint && (
+              <p className="text-muted-foreground text-sm">
+                <span className="font-medium">Watch:</span> {analysis.watchPoint}
+              </p>
+            )}
+            <p className="text-muted-foreground text-xs">{analysis.model} 분석</p>
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

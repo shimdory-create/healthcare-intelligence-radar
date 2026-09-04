@@ -4,6 +4,7 @@ import { getRecentArticles, getPriorityCounts, getLatestCollectionDate, type Art
 import { formatKstDate } from '@/lib/dateFormat';
 import { sendDigestEmail, resolveDashboardUrl } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
+import { enrichTopArticles } from '@/lib/aiEnrichment';
 
 export const maxDuration = 300;
 
@@ -51,10 +52,14 @@ export async function GET(req: NextRequest) {
 
   let email = 'no-collection-date';
   let kakao = 'no-collection-date';
+  let ai = 'no-collection-date';
   if (batch) {
     email = await sendEmailDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
     kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    ai = await enrichTopArticles(batch.articles)
+      .then((r) => r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`)
+      .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  return NextResponse.json({ summary, email, kakao });
+  return NextResponse.json({ summary, email, kakao, ai });
 }

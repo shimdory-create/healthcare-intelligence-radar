@@ -294,3 +294,47 @@ export async function getArticleById(id: number): Promise<ArticleRow | null> {
   `;
   return rows.length > 0 ? rowToArticle(rows[0]) : null;
 }
+
+export interface AiAnalysis {
+  articleId: number;
+  contentHash: string;
+  model: string;
+  relevant: boolean;
+  summary: string;
+  implications: string[];
+  watchPoint: string;
+  analyzedAt: Date;
+}
+
+function rowToAiAnalysis(r: any): AiAnalysis {
+  return {
+    articleId: r.article_id,
+    contentHash: r.content_hash,
+    model: r.model,
+    relevant: r.relevant,
+    summary: r.summary,
+    implications: r.implications,
+    watchPoint: r.watch_point,
+    analyzedAt: r.analyzed_at,
+  };
+}
+
+export async function getAiAnalysis(articleId: number): Promise<AiAnalysis | null> {
+  const rows = await sql`select * from ai_analysis where article_id = ${articleId}`;
+  return rows.length > 0 ? rowToAiAnalysis(rows[0]) : null;
+}
+
+export async function saveAiAnalysis(a: Omit<AiAnalysis, 'analyzedAt'>): Promise<void> {
+  await sql`
+    insert into ai_analysis (article_id, content_hash, model, relevant, summary, implications, watch_point, analyzed_at)
+    values (${a.articleId}, ${a.contentHash}, ${a.model}, ${a.relevant}, ${a.summary}, ${a.implications}, ${a.watchPoint}, now())
+    on conflict (article_id) do update set
+      content_hash = excluded.content_hash,
+      model = excluded.model,
+      relevant = excluded.relevant,
+      summary = excluded.summary,
+      implications = excluded.implications,
+      watch_point = excluded.watch_point,
+      analyzed_at = excluded.analyzed_at
+  `;
+}

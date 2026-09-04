@@ -31,6 +31,20 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now()
 );
 
+-- optional AI enrichment (Gemini free tier) for the day's top-scored articles only.
+-- content_hash lets a re-run skip articles whose title/snippet haven't changed since
+-- the last analysis, so we never re-spend quota on an unchanged article.
+create table if not exists ai_analysis (
+  article_id int primary key references articles(id) on delete cascade,
+  content_hash text not null,
+  model text not null,
+  relevant boolean not null,
+  summary text not null,
+  implications text[] not null default '{}',
+  watch_point text not null default '',
+  analyzed_at timestamptz not null default now()
+);
+
 insert into sources (id, name, rss_url, tier, reliability, fetch_method) values
   ('fsc', '금융위원회', 'http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', 1, 'stable', 'rss'),
   ('mohw', '보건복지부', 'https://www.mohw.go.kr/rss/board.es?mid=a10503000000&bid=0027', 1, 'stable', 'rss'),
