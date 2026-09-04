@@ -33,8 +33,14 @@ async function loadLatestBatch(): Promise<LatestBatch | null> {
   return { collectedDate, articles, counts };
 }
 
+/** email digests are meant to be a quick read -- cap highlights even on a day where most of
+ *  the analyzed top articles turn out relevant. The dashboard (and each article's own page)
+ *  still shows AI summaries for every analyzed article regardless of this cap. */
+const MAX_EMAIL_HIGHLIGHTS = 5;
+
 /** relevant-only AI highlights for the day's batch, resolved from whatever enrichTopArticles
- *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing relevant */
+ *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing relevant.
+ *  Sorted by the article's own rule-based score so the cap keeps the strongest ones. */
 async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
   const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
   const articleById = new Map(batch.articles.map((a) => [a.id, a]));
@@ -43,9 +49,12 @@ async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
     .map((a) => {
       const article = articleById.get(a.articleId);
       if (!article) return null;
-      return { title: article.title, url: article.url, summary: a.summary, watchPoint: a.watchPoint };
+      return { article, highlight: { title: article.title, url: article.url, summary: a.summary, watchPoint: a.watchPoint } };
     })
-    .filter((h): h is DigestHighlight => h !== null);
+    .filter((x): x is { article: ArticleRow; highlight: DigestHighlight } => x !== null)
+    .sort((a, b) => b.article.score - a.article.score)
+    .slice(0, MAX_EMAIL_HIGHLIGHTS)
+    .map((x) => x.highlight);
 }
 
 async function sendEmailDigest(batch: LatestBatch, highlights: DigestHighlight[]): Promise<string> {

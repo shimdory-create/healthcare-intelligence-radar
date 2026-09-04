@@ -3,9 +3,9 @@ import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { sourceDisplayName, TIER_LABELS } from '@/lib/sourceLookup';
-import type { ArticleRow } from '@/lib/db';
+import type { ArticleRow, AiAnalysis } from '@/lib/db';
 
-export function ArticleCard({ article }: { article: ArticleRow }) {
+export function ArticleCard({ article, analysis }: { article: ArticleRow; analysis?: AiAnalysis }) {
   return (
     <TableRow>
       <TableCell className="text-center">
@@ -21,6 +21,12 @@ export function ArticleCard({ article }: { article: ArticleRow }) {
         <Link href={`/article/${article.id}`} className="font-medium hover:underline">
           {article.title}
         </Link>
+        {analysis && (
+          <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+            {!analysis.relevant && <span>(관련성 낮음) </span>}
+            {analysis.summary}
+          </p>
+        )}
       </TableCell>
       <TableCell className="whitespace-normal">
         <div className="flex flex-wrap justify-center gap-1">

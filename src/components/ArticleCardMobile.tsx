@@ -3,9 +3,9 @@ import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { sourceDisplayName, TIER_LABELS } from '@/lib/sourceLookup';
-import type { ArticleRow } from '@/lib/db';
+import type { ArticleRow, AiAnalysis } from '@/lib/db';
 
-export function ArticleCardMobile({ article }: { article: ArticleRow }) {
+export function ArticleCardMobile({ article, analysis }: { article: ArticleRow; analysis?: AiAnalysis }) {
   return (
     <Card size="sm">
       <CardContent className="space-y-2">
@@ -27,6 +27,12 @@ export function ArticleCardMobile({ article }: { article: ArticleRow }) {
         <Link href={`/article/${article.id}`} className="block text-sm font-medium hover:underline">
           {article.title}
         </Link>
+        {analysis && (
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {!analysis.relevant && <span>(관련성 낮음) </span>}
+            {analysis.summary}
+          </p>
+        )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground truncate text-xs">{sourceDisplayName(article.sourceId)}</span>
           <div className="flex flex-wrap justify-end gap-1">

@@ -6,6 +6,7 @@ import {
   getLatestCollectionDate,
   getLastCollectedAt,
   getPriorityCounts,
+  getAiAnalysesForArticles,
   type ArticleFilters,
   type PriorityFilter,
 } from '@/lib/db';
@@ -58,6 +59,8 @@ export default async function HomePage({
     getPriorityCounts(collectedDate),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const analyses = await getAiAnalysesForArticles(articles.map((a) => a.id));
+  const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
 
   function buildPageHref(targetPage: number): string {
     const query = new URLSearchParams();
@@ -105,6 +108,7 @@ export default async function HomePage({
           totalPages={totalPages}
           hasNextPage={hasNextPage}
           buildPageHref={buildPageHref}
+          analysesById={analysesById}
         />
       </div>
     </main>
