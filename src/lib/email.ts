@@ -33,11 +33,38 @@ function tagsHtml(tags: string[]): string {
   return `<div>${pills}</div>`;
 }
 
+export interface DigestHighlight {
+  title: string;
+  url: string;
+  summary: string;
+  watchPoint: string;
+}
+
+function highlightsHtml(highlights: DigestHighlight[]): string {
+  if (highlights.length === 0) return '';
+  const items = highlights
+    .map(
+      (h) => `
+    <div style="border-left:3px solid #111;padding:2px 0 2px 12px;margin:0 0 12px;">
+      <a href="${escapeHtml(h.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(h.title)}</a>
+      <p style="margin:4px 0 0;font-size:13px;color:#444;line-height:1.5;">${escapeHtml(h.summary)}</p>
+      ${h.watchPoint ? `<p style="margin:4px 0 0;font-size:12px;color:#999;">Watch: ${escapeHtml(h.watchPoint)}</p>` : ''}
+    </div>`,
+    )
+    .join('');
+  return `
+    <div style="margin:0 0 20px;">
+      <p style="font-size:13px;font-weight:700;margin:0 0 10px;">🎯 AI 하이라이트</p>
+      ${items}
+    </div>`;
+}
+
 export function buildDigestHtml(
   articles: ArticleRow[],
   counts: PriorityCounts,
   dateLabel: string,
   dashboardUrl: string,
+  highlights: DigestHighlight[] = [],
 ): string {
   const cards = articles
     .map(
@@ -55,6 +82,7 @@ export function buildDigestHtml(
       <h2 style="margin-bottom:4px;">헬스케어 레이더</h2>
       <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
       <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
+      ${highlightsHtml(highlights)}
       <p style="margin:0 0 16px;font-size:11px;color:#999;line-height:1.5;">
         추출 기준: 키워드에 매칭된 기사만 수집 (공공기관/Tier 1 자료는 매칭 여부와 무관하게 모두 수집)<br />
         정렬 기준: 우선순위 높은 순 → 최신순<br />
@@ -71,7 +99,12 @@ export function resolveDashboardUrl(): string {
 }
 
 /** sends the daily digest email; does nothing if there are no articles to report */
-export async function sendDigestEmail(articles: ArticleRow[], counts: PriorityCounts, dateLabel: string): Promise<void> {
+export async function sendDigestEmail(
+  articles: ArticleRow[],
+  counts: PriorityCounts,
+  dateLabel: string,
+  highlights: DigestHighlight[] = [],
+): Promise<void> {
   if (articles.length === 0) return;
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -82,7 +115,7 @@ export async function sendDigestEmail(articles: ArticleRow[], counts: PriorityCo
     throw new Error('RESEND_API_KEY or EMAIL_TO is not set');
   }
 
-  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl());
+  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl(), highlights);
 
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',

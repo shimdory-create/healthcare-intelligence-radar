@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collectAll } from '@/lib/collect';
-import { getRecentArticles, getPriorityCounts, getLatestCollectionDate, type ArticleRow, type PriorityCounts } from '@/lib/db';
+import {
+  getRecentArticles,
+  getPriorityCounts,
+  getLatestCollectionDate,
+  getAiAnalysesForArticles,
+  type ArticleRow,
+  type PriorityCounts,
+} from '@/lib/db';
 import { formatKstDate } from '@/lib/dateFormat';
-import { sendDigestEmail, resolveDashboardUrl } from '@/lib/email';
+import { sendDigestEmail, resolveDashboardUrl, type DigestHighlight } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
 import { enrichTopArticles } from '@/lib/aiEnrichment';
 
@@ -26,9 +33,24 @@ async function loadLatestBatch(): Promise<LatestBatch | null> {
   return { collectedDate, articles, counts };
 }
 
-async function sendEmailDigest(batch: LatestBatch): Promise<string> {
+/** relevant-only AI highlights for the day's batch, resolved from whatever enrichTopArticles
+ *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing relevant */
+async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
+  const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
+  const articleById = new Map(batch.articles.map((a) => [a.id, a]));
+  return analyses
+    .filter((a) => a.relevant)
+    .map((a) => {
+      const article = articleById.get(a.articleId);
+      if (!article) return null;
+      return { title: article.title, url: article.url, summary: a.summary, watchPoint: a.watchPoint };
+    })
+    .filter((h): h is DigestHighlight => h !== null);
+}
+
+async function sendEmailDigest(batch: LatestBatch, highlights: DigestHighlight[]): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
-  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate));
+  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), highlights);
   return 'sent';
 }
 
@@ -54,11 +76,16 @@ export async function GET(req: NextRequest) {
   let kakao = 'no-collection-date';
   let ai = 'no-collection-date';
   if (batch) {
-    email = await sendEmailDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
-    kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    // AI runs first (and is fully isolated by its own catch) so its results, if any, are
+    // ready in time to appear in today's email -- a failure here must never block delivery.
     ai = await enrichTopArticles(batch.articles)
       .then((r) => r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+    const highlights = await loadHighlights(batch).catch(() => []);
+
+    email = await sendEmailDigest(batch, highlights).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return NextResponse.json({ summary, email, kakao, ai });

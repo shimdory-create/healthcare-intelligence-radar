@@ -37,6 +37,22 @@ describe('buildDigestHtml', () => {
     expect(html).toContain('https://healthcare-radar.vercel.app');
   });
 
+  it('omits the AI highlights section when no highlights are passed', () => {
+    const html = buildDigestHtml([makeArticle({})], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
+    expect(html).not.toContain('AI 하이라이트');
+  });
+
+  it('renders each AI highlight with its title, summary, and watch point', () => {
+    const html = buildDigestHtml([makeArticle({})], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', [
+      { title: '비대면 약 배송 확대', url: 'https://example.com/hl1', summary: '제도 단계적 확대 추진', watchPoint: '하위규정 확정 여부' },
+    ]);
+    expect(html).toContain('AI 하이라이트');
+    expect(html).toContain('비대면 약 배송 확대');
+    expect(html).toContain('https://example.com/hl1');
+    expect(html).toContain('제도 단계적 확대 추진');
+    expect(html).toContain('하위규정 확정 여부');
+  });
+
   it('escapes HTML-sensitive characters in titles', () => {
     const articles = [makeArticle({ title: '<script>alert("x")</script> & "따옴표"' })];
 

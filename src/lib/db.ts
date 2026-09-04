@@ -324,6 +324,12 @@ export async function getAiAnalysis(articleId: number): Promise<AiAnalysis | nul
   return rows.length > 0 ? rowToAiAnalysis(rows[0]) : null;
 }
 
+export async function getAiAnalysesForArticles(articleIds: number[]): Promise<AiAnalysis[]> {
+  if (articleIds.length === 0) return [];
+  const rows = await sql`select * from ai_analysis where article_id = any(${articleIds})`;
+  return rows.map(rowToAiAnalysis);
+}
+
 export async function saveAiAnalysis(a: Omit<AiAnalysis, 'analyzedAt'>): Promise<void> {
   await sql`
     insert into ai_analysis (article_id, content_hash, model, relevant, summary, implications, watch_point, analyzed_at)
