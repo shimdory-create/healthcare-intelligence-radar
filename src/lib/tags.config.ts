@@ -4,6 +4,10 @@ export interface TagDefinition {
   /** substrings that should NOT count toward a match even though they contain a keyword
    *  (e.g. "암호화" contains "암" but has nothing to do with cancer) */
   excludeKeywords?: string[];
+  /** generic/broad keyword (e.g. "보험", "플랫폼") that false-positives on unrelated articles
+   *  ("무역보험", 부동산 "플랫폼" news). A weak-only match doesn't promote priority on its own --
+   *  see matchTags in tagging.ts. */
+  weak?: boolean;
 }
 
 export const TAGS: TagDefinition[] = [
@@ -36,9 +40,9 @@ export const TAGS: TagDefinition[] = [
   { tag: 'M&A', keywords: ['M&A', '인수합병', '인수 합병'] },
   { tag: '투자', keywords: ['투자 유치', 'VC 투자', '지분투자'] },
   { tag: '디지털헬스', keywords: ['디지털헬스', '디지털 헬스'] },
-  { tag: '보험', keywords: ['보험'] },
+  { tag: '보험', keywords: ['보험'], weak: true },
   { tag: '비대면의료', keywords: ['비대면진료', '비대면의료', '원격의료', '원격진료'] },
-  { tag: '플랫폼', keywords: ['플랫폼'] },
+  { tag: '플랫폼', keywords: ['플랫폼'], weak: true },
   { tag: '정신건강', keywords: ['정신건강', '정신질환', '우울증'] },
   { tag: '마이데이터', keywords: ['마이데이터'] },
 ];

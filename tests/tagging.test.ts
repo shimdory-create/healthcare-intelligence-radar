@@ -47,4 +47,31 @@ describe('matchTags', () => {
     const result = matchTags('암호화 기술 도입 논의 중, 암 환자 치료비 지원 확대', cancerTag);
     expect(result.tags).toEqual(['암']);
   });
+
+  it('a weak-only match still shows the tag but scores 0, so it cannot promote priority', () => {
+    const weakTags: TagDefinition[] = [{ tag: '보험', keywords: ['보험'], weak: true }];
+    const result = matchTags('중소기업 무역보험 가입 요건 완화', weakTags);
+    expect(result.tags).toEqual(['보험']);
+    expect(result.score).toBe(0);
+  });
+
+  it('multiple weak-only matches still score 0', () => {
+    const weakTags: TagDefinition[] = [
+      { tag: '보험', keywords: ['보험'], weak: true },
+      { tag: '플랫폼', keywords: ['플랫폼'], weak: true },
+    ];
+    const result = matchTags('보험 비교 플랫폼 출시 소식', weakTags);
+    expect(result.tags.sort()).toEqual(['보험', '플랫폼'].sort());
+    expect(result.score).toBe(0);
+  });
+
+  it('a weak tag alongside a strong match counts normally toward the score', () => {
+    const mixedTags: TagDefinition[] = [
+      { tag: '보험', keywords: ['보험'], weak: true },
+      { tag: '헬스케어', keywords: ['헬스케어'] },
+    ];
+    const result = matchTags('헬스케어 보험 서비스 출시', mixedTags);
+    expect(result.tags.sort()).toEqual(['보험', '헬스케어'].sort());
+    expect(result.score).toBe(2);
+  });
 });
