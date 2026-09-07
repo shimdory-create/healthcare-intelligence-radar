@@ -7,6 +7,7 @@ import {
   getAiAnalysesForArticles,
   type ArticleRow,
   type PriorityCounts,
+  type AiAnalysis,
 } from '@/lib/db';
 import { formatKstDate } from '@/lib/dateFormat';
 import { sendDigestEmail, resolveDashboardUrl, type DigestHighlight } from '@/lib/email';
@@ -29,18 +30,14 @@ async function loadBatch(collectedDate: string): Promise<LatestBatch> {
   return { collectedDate, articles, counts };
 }
 
-/** email digests are meant to be a quick read -- cap highlights even on a day where most of
- *  the analyzed articles turn out high-priority. The dashboard (and each article's own page)
- *  still shows AI summaries for every analyzed article regardless of this cap. */
+/** email digests are meant to be a quick read -- cap the curated highlights section even on a
+ *  day where most analyzed articles turn out high-priority. Every card in the full list below
+ *  it still shows its own AI summary regardless of this cap, matching the dashboard. */
 const MAX_EMAIL_HIGHLIGHTS = 5;
 
-/** AI-high-priority highlights for the day's batch, resolved from whatever enrichArticles
- *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing high
- *  priority. Sorted by the article's own rule-based score so the cap keeps the strongest ones. */
-async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
-  const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
-  const articleById = new Map(batch.articles.map((a) => [a.id, a]));
-  return analyses
+function buildHighlights(articles: ArticleRow[], analysesById: Map<number, AiAnalysis>): DigestHighlight[] {
+  const articleById = new Map(articles.map((a) => [a.id, a]));
+  return [...analysesById.values()]
     .filter((a) => a.priority === 'high')
     .map((a) => {
       const article = articleById.get(a.articleId);
@@ -53,9 +50,12 @@ async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
     .map((x) => x.highlight);
 }
 
-async function sendEmailDigest(batch: LatestBatch, highlights: DigestHighlight[]): Promise<string> {
+async function sendEmailDigest(batch: LatestBatch): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
-  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), highlights);
+  const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
+  const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
+  const highlights = buildHighlights(batch.articles, analysesById);
+  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), highlights, analysesById);
   return 'sent';
 }
 
@@ -92,9 +92,7 @@ export async function GET(req: NextRequest) {
     // the pre-AI snapshot enrichArticles was given
     const batch = await loadBatch(collectedDate);
 
-    const highlights = await loadHighlights(batch).catch(() => []);
-
-    email = await sendEmailDigest(batch, highlights).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    email = await sendEmailDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
     kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
   }
 

@@ -1,4 +1,4 @@
-import type { ArticleRow, PriorityCounts } from './db';
+import type { ArticleRow, PriorityCounts, AiAnalysis } from './db';
 import { sourceDisplayName, TIER_LABELS } from './sourceLookup';
 import { PRIORITY_LABELS } from './priority';
 
@@ -60,16 +60,19 @@ export function buildDigestHtml(
   dateLabel: string,
   dashboardUrl: string,
   highlights: DigestHighlight[] = [],
+  analysesById: Map<number, AiAnalysis> = new Map(),
 ): string {
   const cards = articles
-    .map(
-      (a) => `
+    .map((a) => {
+      const analysis = analysesById.get(a.id);
+      return `
     <div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px 12px;margin:0 0 8px;">
       <p style="margin:0 0 4px;font-size:12px;color:#666;">${PRIORITY_LABELS[a.priority]} · ${TIER_LABELS[a.tier]} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
       <a href="${escapeHtml(a.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(a.title)}</a>
+      ${analysis ? `<p style="margin:4px 0 0;font-size:12px;color:#666;line-height:1.5;">${escapeHtml(analysis.summary)}</p>` : ''}
       ${tagsHtml(a.tags)}
-    </div>`,
-    )
+    </div>`;
+    })
     .join('');
 
   return `
@@ -99,6 +102,7 @@ export async function sendDigestEmail(
   counts: PriorityCounts,
   dateLabel: string,
   highlights: DigestHighlight[] = [],
+  analysesById: Map<number, AiAnalysis> = new Map(),
 ): Promise<void> {
   if (articles.length === 0) return;
 
@@ -110,7 +114,7 @@ export async function sendDigestEmail(
     throw new Error('RESEND_API_KEY or EMAIL_TO is not set');
   }
 
-  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl(), highlights);
+  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl(), highlights, analysesById);
 
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',

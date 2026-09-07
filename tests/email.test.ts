@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildDigestHtml } from '@/lib/email';
-import type { ArticleRow, PriorityCounts } from '@/lib/db';
+import type { ArticleRow, PriorityCounts, AiAnalysis } from '@/lib/db';
 
 const COUNTS: PriorityCounts = { total: 2, high: 1, medium: 1, low: 0 };
 
@@ -52,6 +52,39 @@ describe('buildDigestHtml', () => {
     expect(html).toContain('https://example.com/hl1');
     expect(html).toContain('제도 단계적 확대 추진');
     expect(html).toContain('하위규정 확정 여부');
+  });
+
+  it('shows each article\'s own AI summary in its card when analyzed, and nothing extra when not', () => {
+    const analyzed = makeArticle({ id: 1, title: '분석된 기사' });
+    const unanalyzed = makeArticle({ id: 2, title: '미분석 기사' });
+    const analysesById = new Map<number, AiAnalysis>([
+      [
+        1,
+        {
+          articleId: 1,
+          contentHash: 'h',
+          model: 'gemini-3.5-flash-lite',
+          priority: 'high',
+          summary: '카드별 요약 텍스트',
+          implications: [],
+          watchPoint: '',
+          analyzedAt: new Date(),
+        },
+      ],
+    ]);
+
+    const html = buildDigestHtml(
+      [analyzed, unanalyzed],
+      COUNTS,
+      '9월 3일 (목)',
+      'https://healthcare-radar.vercel.app',
+      [],
+      analysesById,
+    );
+
+    expect(html).toContain('카드별 요약 텍스트');
+    // exactly one summary paragraph should appear for the one analyzed article
+    expect(html.match(/카드별 요약 텍스트/g)).toHaveLength(1);
   });
 
   it('escapes HTML-sensitive characters in titles', () => {
