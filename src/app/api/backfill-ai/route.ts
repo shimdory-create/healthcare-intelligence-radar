@@ -11,6 +11,17 @@ export async function GET(req: NextRequest) {
   }
 
   const { articles } = await getRecentArticles({ limit: 1000 });
-  const result = await enrichArticles(articles);
-  return NextResponse.json({ total: articles.length, ...result });
+  try {
+    const result = await enrichArticles(articles);
+    return NextResponse.json({ total: articles.length, ...result });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        total: articles.length,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      { status: 500 },
+    );
+  }
 }
