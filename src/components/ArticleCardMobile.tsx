@@ -10,7 +10,7 @@ export function ArticleCardMobile({ article, analysis }: { article: ArticleRow; 
     <Card size="sm">
       <CardContent className="space-y-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <PriorityBadge score={article.score} />
+          <PriorityBadge priority={article.priority} aiJudged={analysis !== undefined} />
           <span className="text-muted-foreground">{TIER_LABELS[article.tier]}</span>
           <span className="text-muted-foreground ml-auto whitespace-nowrap">
             {article.publishedAt
@@ -27,12 +27,7 @@ export function ArticleCardMobile({ article, analysis }: { article: ArticleRow; 
         <Link href={`/article/${article.id}`} className="block text-sm font-medium hover:underline">
           {article.title}
         </Link>
-        {analysis && (
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            {!analysis.relevant && <span>(관련성 낮음) </span>}
-            {analysis.summary}
-          </p>
-        )}
+        {analysis && <p className="text-muted-foreground text-xs leading-relaxed">{analysis.summary}</p>}
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground truncate text-xs">{sourceDisplayName(article.sourceId)}</span>
           <div className="flex flex-wrap justify-end gap-1">

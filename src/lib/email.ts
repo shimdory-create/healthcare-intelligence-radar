@@ -1,17 +1,12 @@
 import type { ArticleRow, PriorityCounts } from './db';
 import { sourceDisplayName, TIER_LABELS } from './sourceLookup';
+import { PRIORITY_LABELS } from './priority';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
 function escapeHtml(text: string): string {
   const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return text.replace(/[&<>"']/g, (c) => map[c]);
-}
-
-function priorityLabel(score: number): string {
-  if (score >= 3) return '🔴 높음';
-  if (score >= 1) return '🟡 보통';
-  return '⚪ 참고';
 }
 
 function publishedLabel(publishedAt: Date | null): string {
@@ -70,7 +65,7 @@ export function buildDigestHtml(
     .map(
       (a) => `
     <div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px 12px;margin:0 0 8px;">
-      <p style="margin:0 0 4px;font-size:12px;color:#666;">${priorityLabel(a.score)} · ${TIER_LABELS[a.tier]} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
+      <p style="margin:0 0 4px;font-size:12px;color:#666;">${PRIORITY_LABELS[a.priority]} · ${TIER_LABELS[a.tier]} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
       <a href="${escapeHtml(a.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(a.title)}</a>
       ${tagsHtml(a.tags)}
     </div>`,
@@ -86,7 +81,7 @@ export function buildDigestHtml(
       <p style="margin:0 0 16px;font-size:11px;color:#999;line-height:1.5;">
         추출 기준: 키워드에 매칭된 기사만 수집 (공공기관/Tier 1 자료는 매칭 여부와 무관하게 모두 수집)<br />
         정렬 기준: 우선순위 높은 순 → 최신순<br />
-        우선순위 기준: 매칭된 태그 개수 - 3개 이상 🔴 높음, 1~2개 🟡 보통, 0개 ⚪ 참고
+        우선순위 기준: AI가 보험사 헬스케어 관점 실제 업무 관련성으로 판정 (AI 미분석 시 매칭 태그 개수로 잠정 판정)
       </p>
       ${cards}
     </div>`;

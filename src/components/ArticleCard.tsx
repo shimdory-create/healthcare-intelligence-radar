@@ -9,7 +9,7 @@ export function ArticleCard({ article, analysis }: { article: ArticleRow; analys
   return (
     <TableRow>
       <TableCell className="text-center">
-        <PriorityBadge score={article.score} />
+        <PriorityBadge priority={article.priority} aiJudged={analysis !== undefined} />
       </TableCell>
       <TableCell className="text-center">
         <Badge variant="outline">{TIER_LABELS[article.tier]}</Badge>
@@ -22,10 +22,7 @@ export function ArticleCard({ article, analysis }: { article: ArticleRow; analys
           {article.title}
         </Link>
         {analysis && (
-          <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-            {!analysis.relevant && <span>(관련성 낮음) </span>}
-            {analysis.summary}
-          </p>
+          <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{analysis.summary}</p>
         )}
       </TableCell>
       <TableCell className="whitespace-normal">

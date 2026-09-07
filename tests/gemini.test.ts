@@ -41,7 +41,7 @@ describe('analyzeArticles', () => {
       JSON.stringify([
         {
           article_id: 1,
-          relevant: true,
+          priority: 'high',
           summary: '요약',
           implications: ['시사점1', '시사점2'],
           watch_point: '확인사항',
@@ -51,7 +51,7 @@ describe('analyzeArticles', () => {
 
     const result = await analyzeArticles([{ id: 1, title: '제목', snippet: '본문' }]);
     expect(result).toEqual([
-      { articleId: 1, relevant: true, summary: '요약', implications: ['시사점1', '시사점2'], watchPoint: '확인사항' },
+      { articleId: 1, priority: 'high', summary: '요약', implications: ['시사점1', '시사점2'], watchPoint: '확인사항' },
     ]);
   });
 

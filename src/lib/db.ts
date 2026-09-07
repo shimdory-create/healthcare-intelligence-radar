@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import type { PriorityBand } from './priority';
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set');
@@ -15,6 +16,7 @@ export interface ArticleInsert {
   snippet: string;
   tags: string[];
   score: number;
+  priority: PriorityBand;
 }
 
 export async function articleUrlExists(url: string): Promise<boolean> {
@@ -38,12 +40,18 @@ export async function findSameDayTitleDuplicate(titleNorm: string, publishedAt: 
 
 export async function insertArticle(a: ArticleInsert): Promise<boolean> {
   const rows = await sql`
-    insert into articles (source_id, title, url, title_norm, published_at, content_snippet, tags, score)
-    values (${a.sourceId}, ${a.title}, ${a.url}, ${a.titleNorm}, ${a.publishedAt}, ${a.snippet}, ${a.tags}, ${a.score})
+    insert into articles (source_id, title, url, title_norm, published_at, content_snippet, tags, score, priority)
+    values (${a.sourceId}, ${a.title}, ${a.url}, ${a.titleNorm}, ${a.publishedAt}, ${a.snippet}, ${a.tags}, ${a.score}, ${a.priority})
     on conflict (url) do nothing
     returning id
   `;
   return rows.length > 0;
+}
+
+/** overwrites an article's priority band -- used by AI enrichment once that article has been
+ *  analyzed, superseding the keyword-count-derived value it was inserted with */
+export async function updateArticlePriority(articleId: number, priority: PriorityBand): Promise<void> {
+  await sql`update articles set priority = ${priority} where id = ${articleId}`;
 }
 
 export interface ArticleRow {
@@ -57,6 +65,7 @@ export interface ArticleRow {
   snippet: string | null;
   tags: string[];
   score: number;
+  priority: PriorityBand;
 }
 
 export type PriorityFilter = 'high' | 'medium' | 'low' | 'all';
@@ -92,6 +101,7 @@ function rowToArticle(r: any): ArticleRow {
     snippet: r.content_snippet,
     tags: r.tags,
     score: r.score,
+    priority: r.priority,
   };
 }
 
@@ -108,10 +118,8 @@ type FacetField = 'tier' | 'priority' | 'tag' | 'sourceId' | 'search' | 'collect
 function buildConditions(filters: ArticleFilters, exclude?: FacetField): any[] {
   const conditions: any[] = [];
   if (exclude !== 'tier' && filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
-  if (exclude !== 'priority') {
-    if (filters.priority === 'high') conditions.push(sql`a.score >= 3`);
-    else if (filters.priority === 'medium') conditions.push(sql`a.score between 1 and 2`);
-    else if (filters.priority === 'low') conditions.push(sql`a.score = 0`);
+  if (exclude !== 'priority' && filters.priority && filters.priority !== 'all') {
+    conditions.push(sql`a.priority = ${filters.priority}`);
   }
   if (exclude !== 'tag' && filters.tag) conditions.push(sql`${filters.tag} = any(a.tags)`);
   if (exclude !== 'sourceId' && filters.sourceId) conditions.push(sql`a.source_id = ${filters.sourceId}`);
@@ -142,11 +150,11 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
 
   // fetch one extra row to detect whether a next page exists, without a separate count query
   const rows = await sql`
-    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
+    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score, a.priority
     from articles a
     join sources s on s.id = a.source_id
     ${where}
-    order by a.score desc, a.published_at desc nulls last
+    order by (case a.priority when 'high' then 3 when 'medium' then 2 else 1 end) desc, a.published_at desc nulls last
     limit ${limit + 1}
     offset ${offset}
   `;
@@ -184,7 +192,7 @@ export async function getAvailableFacets(filters: ArticleFilters): Promise<Avail
   const tagWhere = buildWhere(buildConditions(filters, 'tag'));
 
   const rows = await sql`
-    select 'priority' as kind, (case when a.score >= 3 then 'high' when a.score >= 1 then 'medium' else 'low' end) as value
+    select 'priority' as kind, a.priority as value
     from articles a
     join sources s on s.id = a.source_id
     ${priorityWhere}
@@ -263,9 +271,9 @@ export async function getPriorityCounts(collectedDate?: string): Promise<Priorit
   const rows = await sql`
     select
       count(*)::int as total,
-      count(*) filter (where a.score >= 3)::int as high,
-      count(*) filter (where a.score between 1 and 2)::int as medium,
-      count(*) filter (where a.score = 0)::int as low
+      count(*) filter (where a.priority = 'high')::int as high,
+      count(*) filter (where a.priority = 'medium')::int as medium,
+      count(*) filter (where a.priority = 'low')::int as low
     from articles a
     ${where}
   `;
@@ -287,7 +295,7 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
 
 export async function getArticleById(id: number): Promise<ArticleRow | null> {
   const rows = await sql`
-    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score
+    select a.id, a.source_id, s.tier, a.title, a.url, a.published_at, a.collected_at, a.content_snippet, a.tags, a.score, a.priority
     from articles a
     join sources s on s.id = a.source_id
     where a.id = ${id}
@@ -299,7 +307,7 @@ export interface AiAnalysis {
   articleId: number;
   contentHash: string;
   model: string;
-  relevant: boolean;
+  priority: PriorityBand;
   summary: string;
   implications: string[];
   watchPoint: string;
@@ -311,7 +319,7 @@ function rowToAiAnalysis(r: any): AiAnalysis {
     articleId: r.article_id,
     contentHash: r.content_hash,
     model: r.model,
-    relevant: r.relevant,
+    priority: r.priority,
     summary: r.summary,
     implications: r.implications,
     watchPoint: r.watch_point,
@@ -332,12 +340,12 @@ export async function getAiAnalysesForArticles(articleIds: number[]): Promise<Ai
 
 export async function saveAiAnalysis(a: Omit<AiAnalysis, 'analyzedAt'>): Promise<void> {
   await sql`
-    insert into ai_analysis (article_id, content_hash, model, relevant, summary, implications, watch_point, analyzed_at)
-    values (${a.articleId}, ${a.contentHash}, ${a.model}, ${a.relevant}, ${a.summary}, ${a.implications}, ${a.watchPoint}, now())
+    insert into ai_analysis (article_id, content_hash, model, priority, summary, implications, watch_point, analyzed_at)
+    values (${a.articleId}, ${a.contentHash}, ${a.model}, ${a.priority}, ${a.summary}, ${a.implications}, ${a.watchPoint}, now())
     on conflict (article_id) do update set
       content_hash = excluded.content_hash,
       model = excluded.model,
-      relevant = excluded.relevant,
+      priority = excluded.priority,
       summary = excluded.summary,
       implications = excluded.implications,
       watch_point = excluded.watch_point,

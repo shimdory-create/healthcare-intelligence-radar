@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import type { PriorityBand } from './priority';
 
 export interface GeminiArticleInput {
   id: number;
@@ -8,7 +9,7 @@ export interface GeminiArticleInput {
 
 export interface GeminiAnalysisItem {
   articleId: number;
-  relevant: boolean;
+  priority: PriorityBand;
   summary: string;
   implications: string[];
   watchPoint: string;
@@ -24,12 +25,12 @@ const RESPONSE_SCHEMA = {
     type: 'object',
     properties: {
       article_id: { type: 'integer' },
-      relevant: { type: 'boolean' },
+      priority: { type: 'string', enum: ['high', 'medium', 'low'] },
       summary: { type: 'string' },
       implications: { type: 'array', items: { type: 'string' } },
       watch_point: { type: 'string' },
     },
-    required: ['article_id', 'relevant', 'summary', 'implications', 'watch_point'],
+    required: ['article_id', 'priority', 'summary', 'implications', 'watch_point'],
   },
 };
 
@@ -47,11 +48,15 @@ ${list}
 
 각 기사에 대해 다음 필드를 포함한 JSON 배열로만 응답하세요 (다른 텍스트 없이):
 - article_id: 위 목록의 id 값 그대로
-- relevant: 보험사 헬스케어 사업과 실제 관련 있는지 (true/false)
+- priority: 보험사 헬스케어 사업 관점에서의 중요도를 다음 세 단계 중 하나로 판정
+  - "high": 오늘 반드시 확인해야 할 만큼 사업/정책에 직접 영향 있음
+  - "medium": 참고할 가치는 있으나 당장 급하지 않음
+  - "low": 키워드는 관련되어 보이지만 실제로는 무관하거나 사업적 함의가 거의 없음
 - summary: 핵심 변화를 한국어 2~3문장으로 요약
 - implications: 보험사 헬스케어 관점 시사점 1~2개
 - watch_point: 향후 확인할 사항 1개
 
+단순히 키워드가 많이 등장했다고 priority를 높이지 마세요 -- 실제 사업 관련성으로 판단하세요.
 불필요하게 길게 쓰지 마세요.`;
 }
 
@@ -88,7 +93,7 @@ export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<G
 
   const parsed = JSON.parse(text) as Array<{
     article_id: number;
-    relevant: boolean;
+    priority: PriorityBand;
     summary: string;
     implications: string[];
     watch_point: string;
@@ -96,7 +101,7 @@ export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<G
 
   return parsed.map((p) => ({
     articleId: p.article_id,
-    relevant: p.relevant,
+    priority: p.priority,
     summary: p.summary,
     implications: p.implications,
     watchPoint: p.watch_point,

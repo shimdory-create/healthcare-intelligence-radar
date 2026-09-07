@@ -11,7 +11,7 @@ import {
 import { formatKstDate } from '@/lib/dateFormat';
 import { sendDigestEmail, resolveDashboardUrl, type DigestHighlight } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
-import { enrichTopArticles } from '@/lib/aiEnrichment';
+import { enrichArticles } from '@/lib/aiEnrichment';
 
 export const maxDuration = 300;
 
@@ -21,31 +21,27 @@ interface LatestBatch {
   counts: PriorityCounts;
 }
 
-async function loadLatestBatch(): Promise<LatestBatch | null> {
-  const collectedDate = await getLatestCollectionDate();
-  if (!collectedDate) return null;
-
+async function loadBatch(collectedDate: string): Promise<LatestBatch> {
   const [{ articles }, counts] = await Promise.all([
     getRecentArticles({ collectedDate, limit: 500 }),
     getPriorityCounts(collectedDate),
   ]);
-
   return { collectedDate, articles, counts };
 }
 
 /** email digests are meant to be a quick read -- cap highlights even on a day where most of
- *  the analyzed top articles turn out relevant. The dashboard (and each article's own page)
+ *  the analyzed articles turn out high-priority. The dashboard (and each article's own page)
  *  still shows AI summaries for every analyzed article regardless of this cap. */
 const MAX_EMAIL_HIGHLIGHTS = 5;
 
-/** relevant-only AI highlights for the day's batch, resolved from whatever enrichTopArticles
- *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing relevant.
- *  Sorted by the article's own rule-based score so the cap keeps the strongest ones. */
+/** AI-high-priority highlights for the day's batch, resolved from whatever enrichArticles
+ *  already analyzed and cached -- empty if AI enrichment was skipped or found nothing high
+ *  priority. Sorted by the article's own rule-based score so the cap keeps the strongest ones. */
 async function loadHighlights(batch: LatestBatch): Promise<DigestHighlight[]> {
   const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
   const articleById = new Map(batch.articles.map((a) => [a.id, a]));
   return analyses
-    .filter((a) => a.relevant)
+    .filter((a) => a.priority === 'high')
     .map((a) => {
       const article = articleById.get(a.articleId);
       if (!article) return null;
@@ -79,17 +75,22 @@ export async function GET(req: NextRequest) {
 
   const summary = await collectAll();
 
-  const batch = await loadLatestBatch();
+  const collectedDate = await getLatestCollectionDate();
 
   let email = 'no-collection-date';
   let kakao = 'no-collection-date';
   let ai = 'no-collection-date';
-  if (batch) {
-    // AI runs first (and is fully isolated by its own catch) so its results, if any, are
-    // ready in time to appear in today's email -- a failure here must never block delivery.
-    ai = await enrichTopArticles(batch.articles)
+  if (collectedDate) {
+    // AI runs first (and is fully isolated by its own catch) so its priority updates, if any,
+    // are ready in time for today's email/kakao -- a failure here must never block delivery.
+    const preAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    ai = await enrichArticles(preAiArticles)
       .then((r) => r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+    // re-fetched after enrichment so the batch reflects AI-updated priorities rather than
+    // the pre-AI snapshot enrichArticles was given
+    const batch = await loadBatch(collectedDate);
 
     const highlights = await loadHighlights(batch).catch(() => []);
 

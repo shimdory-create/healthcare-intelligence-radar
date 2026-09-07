@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getArticleById, getAiAnalysis } from '@/lib/db';
 import { sourceDisplayName } from '@/lib/sourceLookup';
 import { Badge } from '@/components/ui/badge';
+import { PriorityBadge } from '@/components/PriorityBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { buttonVariants } from '@/components/ui/button';
@@ -62,7 +63,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle className="text-sm font-medium">AI 분석</CardTitle>
-              {!analysis.relevant && <Badge variant="outline">관련성 낮음</Badge>}
+              <PriorityBadge priority={analysis.priority} aiJudged />
             </div>
           </CardHeader>
           <CardContent className="space-y-3">

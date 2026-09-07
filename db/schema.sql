@@ -17,11 +17,18 @@ create table if not exists articles (
   collected_at timestamptz not null default now(),
   content_snippet text,
   tags text[] not null default '{}',
-  score int not null default 0
+  score int not null default 0,
+  -- initially derived from score at collection time, then overwritten by AI enrichment once
+  -- that article is analyzed -- see src/lib/priority.ts and src/lib/aiEnrichment.ts
+  priority text not null default 'low'
 );
+
+-- idempotent for the already-deployed table (create table above is skipped once it exists)
+alter table articles add column if not exists priority text not null default 'low';
 
 create index if not exists idx_articles_title_norm_published on articles (title_norm, published_at);
 create index if not exists idx_articles_published_at on articles (published_at desc);
+create index if not exists idx_articles_priority on articles (priority);
 
 -- generic key-value store for small pieces of app state (e.g. the Kakao OAuth refresh token)
 -- that need to persist across serverless invocations, unlike a static env var
@@ -31,14 +38,15 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now()
 );
 
--- optional AI enrichment (Gemini free tier) for the day's top-scored articles only.
--- content_hash lets a re-run skip articles whose title/snippet haven't changed since
--- the last analysis, so we never re-spend quota on an unchanged article.
+-- optional AI enrichment (Gemini free tier). Every collected article is analyzed (or
+-- re-analyzed only if its content_hash changed since last time, so an unchanged article
+-- never re-spends quota); its priority band here is copied onto articles.priority,
+-- superseding the initial keyword-count-derived value.
 create table if not exists ai_analysis (
   article_id int primary key references articles(id) on delete cascade,
   content_hash text not null,
   model text not null,
-  relevant boolean not null,
+  priority text not null,
   summary text not null,
   implications text[] not null default '{}',
   watch_point text not null default '',

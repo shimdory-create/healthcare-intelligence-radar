@@ -1,18 +1,20 @@
 import { Badge } from '@/components/ui/badge';
+import type { PriorityBand } from '@/lib/priority';
 
-export function PriorityBadge({ score }: { score: number }) {
-  if (score >= 3) {
+export function PriorityBadge({ priority, aiJudged }: { priority: PriorityBand; aiJudged: boolean }) {
+  const title = aiJudged ? 'AI 판정' : '키워드 기반 (AI 미분석)';
+  if (priority === 'high') {
     return (
-      <Badge variant="destructive" title={`관련도 점수 ${score}`}>
+      <Badge variant="destructive" title={title}>
         🔴 높음
       </Badge>
     );
   }
-  if (score >= 1) {
+  if (priority === 'medium') {
     return (
       <Badge
         variant="outline"
-        title={`관련도 점수 ${score}`}
+        title={title}
         className="border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
       >
         🟡 보통
@@ -20,7 +22,7 @@ export function PriorityBadge({ score }: { score: number }) {
     );
   }
   return (
-    <Badge variant="outline" title={`관련도 점수 ${score}`}>
+    <Badge variant="outline" title={title}>
       ⚪ 참고
     </Badge>
   );

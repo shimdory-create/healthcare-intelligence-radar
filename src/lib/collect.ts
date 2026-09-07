@@ -2,6 +2,7 @@ import { SOURCES, type SourceConfig } from './sources.config';
 import { fetchSourceArticles } from './rss';
 import { normalizeTitle } from './normalize';
 import { matchTags } from './tagging';
+import { scoreToPriority } from './priority';
 import { articleUrlExists, findSameDayTitleDuplicate, insertArticle } from './db';
 
 export interface CollectionSummary {
@@ -59,6 +60,7 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
         snippet: a.snippet,
         tags,
         score,
+        priority: scoreToPriority(score),
       });
       if (inserted) summary.inserted++;
     }

@@ -16,6 +16,7 @@ function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
     snippet: null,
     tags: [],
     score: 3,
+    priority: 'high',
     ...overrides,
   };
 }
