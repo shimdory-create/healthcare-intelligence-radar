@@ -5,24 +5,44 @@ import type { PriorityBand } from './priority';
 const PRIORITY_RANK: Record<PriorityBand, number> = { high: 3, medium: 2, low: 1 };
 const DEMOTE: Record<PriorityBand, PriorityBand> = { high: 'medium', medium: 'low', low: 'low' };
 
-/** two same-day articles sharing 2+ matched tags are treated as covering the same underlying
- *  story -- a cheap proxy for cross-outlet duplicate coverage that avoids the false-merge risk
- *  of real title-similarity clustering. This only ever adjusts priority; it never hides,
- *  merges, or removes an article. */
-function shareStory(a: ArticleRow, b: ArticleRow): boolean {
+/** most articles only carry a single matched tag, so requiring 2+ shared tags never fires in
+ *  practice -- tag overlap alone is too coarse. Title-word Jaccard similarity is combined with
+ *  it instead: calibrated against a real day's data, genuine cross-outlet duplicates ("한양대병원,
+ *  16개 전문센터 갖춘 '한양대암병원' 개원" vs "16개 전문 센터와 통합진료체계 갖춘 '한양대암병원' 개원")
+ *  scored 0.20-0.67, while distinct same-tag articles scored 0.00-0.07 -- a clear gap. */
+const TITLE_SIMILARITY_THRESHOLD = 0.15;
+
+function titleTokens(title: string): Set<string> {
+  return new Set(
+    title
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 1),
+  );
+}
+
+function titleJaccard(a: Set<string>, b: Set<string>): number {
+  const intersection = [...a].filter((t) => b.has(t)).length;
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/** two same-day articles are treated as covering the same underlying story if they share at
+ *  least one matched tag AND their titles are similar enough -- a cheap proxy for cross-outlet
+ *  duplicate coverage that avoids the false-merge risk of real clustering. This only ever
+ *  adjusts priority; it never hides, merges, or removes an article. */
+function shareStory(a: ArticleRow & { tokens: Set<string> }, b: ArticleRow & { tokens: Set<string> }): boolean {
   if (a.tags.length === 0 || b.tags.length === 0) return false;
-  const setA = new Set(a.tags);
-  let overlap = 0;
-  for (const t of b.tags) {
-    if (setA.has(t)) overlap++;
-    if (overlap >= 2) return true;
-  }
-  return false;
+  const sharesTag = a.tags.some((t) => b.tags.includes(t));
+  if (!sharesTag) return false;
+  return titleJaccard(a.tokens, b.tokens) >= TITLE_SIMILARITY_THRESHOLD;
 }
 
 function findGroups(articles: ArticleRow[]): ArticleRow[][] {
+  const withTokens = articles.map((a) => ({ ...a, tokens: titleTokens(a.title) }));
+
   const parent = new Map<number, number>();
-  articles.forEach((a) => parent.set(a.id, a.id));
+  withTokens.forEach((a) => parent.set(a.id, a.id));
   function find(id: number): number {
     let root = id;
     while (parent.get(root) !== root) root = parent.get(root)!;
@@ -33,9 +53,9 @@ function findGroups(articles: ArticleRow[]): ArticleRow[][] {
     const rb = find(b);
     if (ra !== rb) parent.set(ra, rb);
   }
-  for (let i = 0; i < articles.length; i++) {
-    for (let j = i + 1; j < articles.length; j++) {
-      if (shareStory(articles[i], articles[j])) union(articles[i].id, articles[j].id);
+  for (let i = 0; i < withTokens.length; i++) {
+    for (let j = i + 1; j < withTokens.length; j++) {
+      if (shareStory(withTokens[i], withTokens[j])) union(withTokens[i].id, withTokens[j].id);
     }
   }
   const groups = new Map<number, ArticleRow[]>();

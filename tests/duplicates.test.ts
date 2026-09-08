@@ -26,28 +26,50 @@ beforeEach(() => {
 });
 
 describe('demoteDuplicatePriorities', () => {
-  it('demotes every article but the strongest one in a group sharing 2+ tags', async () => {
+  it('demotes every article but the strongest one in a group with a shared tag and similar titles', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
-      makeArticle({ id: 1, tags: ['디지털헬스', '심뇌혈관'], priority: 'high', publishedAt: new Date('2026-09-08T01:00:00Z') }),
-      makeArticle({ id: 2, tags: ['디지털헬스', '심뇌혈관'], priority: 'high', publishedAt: new Date('2026-09-08T02:00:00Z') }),
-      makeArticle({ id: 3, tags: ['디지털헬스', '심뇌혈관'], priority: 'high', publishedAt: new Date('2026-09-08T03:00:00Z') }),
+      makeArticle({
+        id: 1,
+        tags: ['암'],
+        title: "16개 전문 센터와 통합진료체계 갖춘 '한양대암병원' 개원",
+        priority: 'high',
+        publishedAt: new Date('2026-09-08T01:00:00Z'),
+      }),
+      makeArticle({
+        id: 2,
+        tags: ['암'],
+        title: '한양대병원, 16개 전문센터 갖춘 한양대암병원 개원',
+        priority: 'high',
+        publishedAt: new Date('2026-09-08T02:00:00Z'),
+      }),
     ];
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 2, groups: 1 });
+    expect(result).toEqual({ demoted: 1, groups: 1 });
     // article 1 published first -- kept as-is
     expect(updateArticlePriority).not.toHaveBeenCalledWith(1, expect.anything());
     expect(updateArticlePriority).toHaveBeenCalledWith(2, 'medium');
-    expect(updateArticlePriority).toHaveBeenCalledWith(3, 'medium');
   });
 
   it('keeps the highest-priority member as the survivor even if published later', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
-      makeArticle({ id: 1, tags: ['치매', '시니어'], priority: 'medium', publishedAt: new Date('2026-09-08T01:00:00Z') }),
-      makeArticle({ id: 2, tags: ['치매', '시니어'], priority: 'high', publishedAt: new Date('2026-09-08T02:00:00Z') }),
+      makeArticle({
+        id: 1,
+        tags: ['암'],
+        title: '연세암병원 중입자치료, 4기 소수전이 폐암까지 확대',
+        priority: 'medium',
+        publishedAt: new Date('2026-09-08T01:00:00Z'),
+      }),
+      makeArticle({
+        id: 2,
+        tags: ['암'],
+        title: '연세암병원 중입자치료, 초기 폐암 넘어 4기 소수전이 폐암까지 확대',
+        priority: 'high',
+        publishedAt: new Date('2026-09-08T02:00:00Z'),
+      }),
     ];
 
     await demoteDuplicatePriorities(articles);
@@ -56,11 +78,11 @@ describe('demoteDuplicatePriorities', () => {
     expect(updateArticlePriority).toHaveBeenCalledWith(1, 'low');
   });
 
-  it('does not touch articles sharing only one tag', async () => {
+  it('does not group same-tag articles whose titles are actually different stories', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
-      makeArticle({ id: 1, tags: ['치매'], priority: 'high' }),
-      makeArticle({ id: 2, tags: ['치매', '시니어'], priority: 'high' }),
+      makeArticle({ id: 1, tags: ['암'], title: '“건강검진서 못 잡아내 암 키웠다”… 유방암 진단까지 2개월', priority: 'high' }),
+      makeArticle({ id: 2, tags: ['암'], title: '“젊어서 암 아니다” 의사가 치질이랬는데, 대장암', priority: 'high' }),
     ];
 
     const result = await demoteDuplicatePriorities(articles);
@@ -69,11 +91,24 @@ describe('demoteDuplicatePriorities', () => {
     expect(updateArticlePriority).not.toHaveBeenCalled();
   });
 
-  it('does not touch articles with no tags', async () => {
+  it('does not touch articles with no tags even if titles are similar', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
-      makeArticle({ id: 1, tags: [], priority: 'high' }),
-      makeArticle({ id: 2, tags: [], priority: 'high' }),
+      makeArticle({ id: 1, tags: [], title: '한양대암병원 개원 16개 전문센터', priority: 'high' }),
+      makeArticle({ id: 2, tags: [], title: '한양대암병원 개원 16개 전문센터 확대', priority: 'high' }),
+    ];
+
+    const result = await demoteDuplicatePriorities(articles);
+
+    expect(result).toEqual({ demoted: 0, groups: 0 });
+    expect(updateArticlePriority).not.toHaveBeenCalled();
+  });
+
+  it('does not group articles that only share a tag with dissimilar titles', async () => {
+    const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
+    const articles = [
+      makeArticle({ id: 1, tags: ['보험'], title: '금융위원회 실손보험 개편 방안 발표', priority: 'high' }),
+      makeArticle({ id: 2, tags: ['보험'], title: '생명보험협회 AI 도입 확대', priority: 'low' }),
     ];
 
     const result = await demoteDuplicatePriorities(articles);
@@ -85,8 +120,8 @@ describe('demoteDuplicatePriorities', () => {
   it('low stays low (no-op) so it is not counted as demoted', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
-      makeArticle({ id: 1, tags: ['보험', 'GLP-1'], priority: 'high' }),
-      makeArticle({ id: 2, tags: ['보험', 'GLP-1'], priority: 'low' }),
+      makeArticle({ id: 1, tags: ['디지털헬스'], title: '스카이랩스 24시간 혈압 측정 가능성 제시', priority: 'high' }),
+      makeArticle({ id: 2, tags: ['디지털헬스'], title: '스카이랩스 24시간 혈압 측정 가능성 입증', priority: 'low' }),
     ];
 
     const result = await demoteDuplicatePriorities(articles);
