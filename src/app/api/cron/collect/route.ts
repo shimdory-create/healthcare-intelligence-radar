@@ -13,6 +13,7 @@ import { formatKstDate } from '@/lib/dateFormat';
 import { sendDigestEmail, resolveDashboardUrl, type DigestHighlight } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
 import { enrichArticles } from '@/lib/aiEnrichment';
+import { demoteDuplicatePriorities } from '@/lib/duplicates';
 
 export const maxDuration = 300;
 
@@ -35,14 +36,16 @@ async function loadBatch(collectedDate: string): Promise<LatestBatch> {
  *  it still shows its own AI summary regardless of this cap, matching the dashboard. */
 const MAX_EMAIL_HIGHLIGHTS = 5;
 
+/** highlights follow each article's final displayed priority (articles.priority) rather than
+ *  the raw ai_analysis.priority -- a duplicate-demoted article (see demoteDuplicatePriorities)
+ *  is no longer "high" on the dashboard, so it must not appear as a highlight here either. */
 function buildHighlights(articles: ArticleRow[], analysesById: Map<number, AiAnalysis>): DigestHighlight[] {
-  const articleById = new Map(articles.map((a) => [a.id, a]));
-  return [...analysesById.values()]
-    .filter((a) => a.priority === 'high')
-    .map((a) => {
-      const article = articleById.get(a.articleId);
-      if (!article) return null;
-      return { article, highlight: { title: article.title, url: article.url, summary: a.summary, watchPoint: a.watchPoint } };
+  return articles
+    .filter((article) => article.priority === 'high')
+    .map((article) => {
+      const analysis = analysesById.get(article.id);
+      if (!analysis) return null;
+      return { article, highlight: { title: article.title, url: article.url, summary: analysis.summary, watchPoint: analysis.watchPoint } };
     })
     .filter((x): x is { article: ArticleRow; highlight: DigestHighlight } => x !== null)
     .sort((a, b) => b.article.score - a.article.score)
@@ -80,6 +83,7 @@ export async function GET(req: NextRequest) {
   let email = 'no-collection-date';
   let kakao = 'no-collection-date';
   let ai = 'no-collection-date';
+  let dedupe = 'no-collection-date';
   if (collectedDate) {
     // AI runs first (and is fully isolated by its own catch) so its priority updates, if any,
     // are ready in time for today's email/kakao -- a failure here must never block delivery.
@@ -88,13 +92,21 @@ export async function GET(req: NextRequest) {
       .then((r) => r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
-    // re-fetched after enrichment so the batch reflects AI-updated priorities rather than
-    // the pre-AI snapshot enrichArticles was given
+    // cross-outlet duplicate coverage of the same story (2+ shared tags, same day) shouldn't
+    // each count as their own "high" -- demote all but the strongest one, using whatever
+    // priority AI (or the rule-based fallback) just set
+    const postAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    dedupe = await demoteDuplicatePriorities(postAiArticles)
+      .then((r) => `demoted ${r.demoted} across ${r.groups} groups`)
+      .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+    // re-fetched again so the batch reflects both AI-updated and dedupe-demoted priorities
+    // rather than an earlier snapshot
     const batch = await loadBatch(collectedDate);
 
     email = await sendEmailDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
     kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  return NextResponse.json({ summary, email, kakao, ai });
+  return NextResponse.json({ summary, email, kakao, ai, dedupe });
 }
