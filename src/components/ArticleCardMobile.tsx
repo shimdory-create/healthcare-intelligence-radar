@@ -24,10 +24,18 @@ export function ArticleCardMobile({ article, analysis }: { article: ArticleRow; 
               : '날짜 미상'}
           </span>
         </div>
-        <Link href={`/article/${article.id}`} className="block text-sm font-medium hover:underline">
+        <a href={article.url} target="_blank" rel="noreferrer" className="block text-sm font-medium hover:underline">
           {article.title}
-        </Link>
-        {analysis && <p className="text-muted-foreground text-xs leading-relaxed">{analysis.summary}</p>}
+        </a>
+        {analysis && (
+          <>
+            <p className="text-muted-foreground text-xs leading-relaxed">{analysis.summary}</p>
+            {analysis.watchPoint && <p className="text-muted-foreground text-xs">Watch: {analysis.watchPoint}</p>}
+            <Link href={`/article/${article.id}`} className="text-muted-foreground inline-block text-xs hover:underline">
+              AI 분석 →
+            </Link>
+          </>
+        )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground truncate text-xs">{sourceDisplayName(article.sourceId)}</span>
           <div className="flex flex-wrap justify-end gap-1">

@@ -21,6 +21,20 @@ function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
   };
 }
 
+function makeAnalysis(overrides: Partial<AiAnalysis>): AiAnalysis {
+  return {
+    articleId: 1,
+    contentHash: 'h',
+    model: 'gemini-3.5-flash-lite',
+    priority: 'high',
+    summary: '카드별 요약 텍스트',
+    implications: [],
+    watchPoint: '',
+    analyzedAt: new Date(),
+    ...overrides,
+  };
+}
+
 describe('buildDigestHtml', () => {
   it('includes the date label, counts, and each article title/url', () => {
     const articles = [
@@ -38,53 +52,38 @@ describe('buildDigestHtml', () => {
     expect(html).toContain('https://healthcare-radar.vercel.app');
   });
 
-  it('omits the AI highlights section when no highlights are passed', () => {
-    const html = buildDigestHtml([makeArticle({})], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
-    expect(html).not.toContain('AI 하이라이트');
-  });
-
-  it('renders each AI highlight with its title, summary, and watch point', () => {
-    const html = buildDigestHtml([makeArticle({})], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', [
-      { title: '비대면 약 배송 확대', url: 'https://example.com/hl1', summary: '제도 단계적 확대 추진', watchPoint: '하위규정 확정 여부' },
-    ]);
-    expect(html).toContain('AI 하이라이트');
-    expect(html).toContain('비대면 약 배송 확대');
-    expect(html).toContain('https://example.com/hl1');
-    expect(html).toContain('제도 단계적 확대 추진');
-    expect(html).toContain('하위규정 확정 여부');
-  });
-
-  it('shows each article\'s own AI summary in its card when analyzed, and nothing extra when not', () => {
+  it("shows each article's own AI summary in its card when analyzed, and nothing extra when not", () => {
     const analyzed = makeArticle({ id: 1, title: '분석된 기사' });
     const unanalyzed = makeArticle({ id: 2, title: '미분석 기사' });
-    const analysesById = new Map<number, AiAnalysis>([
-      [
-        1,
-        {
-          articleId: 1,
-          contentHash: 'h',
-          model: 'gemini-3.5-flash-lite',
-          priority: 'high',
-          summary: '카드별 요약 텍스트',
-          implications: [],
-          watchPoint: '',
-          analyzedAt: new Date(),
-        },
-      ],
-    ]);
+    const analysesById = new Map<number, AiAnalysis>([[1, makeAnalysis({ articleId: 1 })]]);
 
-    const html = buildDigestHtml(
-      [analyzed, unanalyzed],
-      COUNTS,
-      '9월 3일 (목)',
-      'https://healthcare-radar.vercel.app',
-      [],
-      analysesById,
-    );
+    const html = buildDigestHtml([analyzed, unanalyzed], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', analysesById);
 
     expect(html).toContain('카드별 요약 텍스트');
     // exactly one summary paragraph should appear for the one analyzed article
     expect(html.match(/카드별 요약 텍스트/g)).toHaveLength(1);
+  });
+
+  it('shows the watch point and a link to the AI detail page when analyzed', () => {
+    const article = makeArticle({ id: 1 });
+    const analysesById = new Map<number, AiAnalysis>([
+      [1, makeAnalysis({ articleId: 1, watchPoint: '하위규정 확정 여부' })],
+    ]);
+
+    const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', analysesById);
+
+    expect(html).toContain('하위규정 확정 여부');
+    expect(html).toContain('https://healthcare-radar.vercel.app/article/1');
+    expect(html).toContain('AI 분석 →');
+  });
+
+  it('omits the watch point line when there is no watch point', () => {
+    const article = makeArticle({ id: 1 });
+    const analysesById = new Map<number, AiAnalysis>([[1, makeAnalysis({ articleId: 1, watchPoint: '' })]]);
+
+    const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', analysesById);
+
+    expect(html).not.toContain('Watch:');
   });
 
   it('escapes HTML-sensitive characters in titles', () => {

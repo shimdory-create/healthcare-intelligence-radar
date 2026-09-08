@@ -89,10 +89,12 @@ export function FilterBar({
         <Input name="search" defaultValue={search ?? ''} placeholder="검색어 (제목·본문)" className="w-[200px]" />
         <Button type="submit">조회</Button>
       </form>
-      <p className="text-muted-foreground text-xs">
-        추출 기준: 키워드에 매칭된 기사만 수집합니다 (공공기관 자료는 매칭 여부와 무관하게 모두 수집). 우선순위 기준: AI가
-        보험사 헬스케어 관점 실제 업무 관련성으로 판정합니다 (AI 미분석 시 매칭 태그 개수로 잠정 판정). 정렬 기준: 우선순위
-        높은 순 → 최신순. 검색은 제목과 본문을 함께 찾습니다.
+      <p className="text-muted-foreground space-y-0.5 text-xs">
+        <span className="block">추출 기준: 키워드에 매칭된 기사만 수집합니다 (공공기관 자료는 매칭 여부와 무관하게 모두 수집).</span>
+        <span className="block">
+          우선순위 기준: AI가 보험사 헬스케어 관점 실제 업무 관련성으로 판정합니다 (AI 미분석 시 매칭 태그 개수로 잠정 판정).
+        </span>
+        <span className="block">정렬 기준: 우선순위 높은 순 → 최신순. 검색은 제목과 본문을 함께 찾습니다.</span>
       </p>
     </div>
   );

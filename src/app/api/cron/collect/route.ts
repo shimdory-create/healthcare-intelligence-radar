@@ -7,10 +7,9 @@ import {
   getAiAnalysesForArticles,
   type ArticleRow,
   type PriorityCounts,
-  type AiAnalysis,
 } from '@/lib/db';
 import { formatKstDate } from '@/lib/dateFormat';
-import { sendDigestEmail, resolveDashboardUrl, type DigestHighlight } from '@/lib/email';
+import { sendDigestEmail, resolveDashboardUrl } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
 import { enrichArticles } from '@/lib/aiEnrichment';
 import { demoteDuplicatePriorities } from '@/lib/duplicates';
@@ -31,34 +30,11 @@ async function loadBatch(collectedDate: string): Promise<LatestBatch> {
   return { collectedDate, articles, counts };
 }
 
-/** email digests are meant to be a quick read -- cap the curated highlights section even on a
- *  day where most analyzed articles turn out high-priority. Every card in the full list below
- *  it still shows its own AI summary regardless of this cap, matching the dashboard. */
-const MAX_EMAIL_HIGHLIGHTS = 5;
-
-/** highlights follow each article's final displayed priority (articles.priority) rather than
- *  the raw ai_analysis.priority -- a duplicate-demoted article (see demoteDuplicatePriorities)
- *  is no longer "high" on the dashboard, so it must not appear as a highlight here either. */
-function buildHighlights(articles: ArticleRow[], analysesById: Map<number, AiAnalysis>): DigestHighlight[] {
-  return articles
-    .filter((article) => article.priority === 'high')
-    .map((article) => {
-      const analysis = analysesById.get(article.id);
-      if (!analysis) return null;
-      return { article, highlight: { title: article.title, url: article.url, summary: analysis.summary, watchPoint: analysis.watchPoint } };
-    })
-    .filter((x): x is { article: ArticleRow; highlight: DigestHighlight } => x !== null)
-    .sort((a, b) => b.article.score - a.article.score)
-    .slice(0, MAX_EMAIL_HIGHLIGHTS)
-    .map((x) => x.highlight);
-}
-
 async function sendEmailDigest(batch: LatestBatch): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
   const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
   const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
-  const highlights = buildHighlights(batch.articles, analysesById);
-  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), highlights, analysesById);
+  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), analysesById);
   return 'sent';
 }
 
