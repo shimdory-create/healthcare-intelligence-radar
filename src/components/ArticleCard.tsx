@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
@@ -24,12 +23,16 @@ export function ArticleCard({ article, analysis }: { article: ArticleRow; analys
         {analysis && (
           <>
             <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{analysis.summary}</p>
+            {analysis.implications.length > 0 && (
+              <ul className="text-muted-foreground mt-1 list-disc space-y-0.5 pl-4 text-xs">
+                {analysis.implications.map((point, i) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            )}
             {analysis.watchPoint && (
               <p className="text-muted-foreground mt-1 text-xs">Watch: {analysis.watchPoint}</p>
             )}
-            <Link href={`/article/${article.id}`} className="text-muted-foreground mt-1 inline-block text-xs hover:underline">
-              AI 분석 →
-            </Link>
           </>
         )}
       </TableCell>

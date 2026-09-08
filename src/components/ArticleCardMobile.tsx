@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,10 +29,14 @@ export function ArticleCardMobile({ article, analysis }: { article: ArticleRow; 
         {analysis && (
           <>
             <p className="text-muted-foreground text-xs leading-relaxed">{analysis.summary}</p>
+            {analysis.implications.length > 0 && (
+              <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
+                {analysis.implications.map((point, i) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            )}
             {analysis.watchPoint && <p className="text-muted-foreground text-xs">Watch: {analysis.watchPoint}</p>}
-            <Link href={`/article/${article.id}`} className="text-muted-foreground inline-block text-xs hover:underline">
-              AI 분석 →
-            </Link>
           </>
         )}
         <div className="flex items-center justify-between gap-2">

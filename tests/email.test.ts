@@ -64,17 +64,19 @@ describe('buildDigestHtml', () => {
     expect(html.match(/카드별 요약 텍스트/g)).toHaveLength(1);
   });
 
-  it('shows the watch point and a link to the AI detail page when analyzed', () => {
+  it('shows the watch point and implications inline, with no link to a separate detail page', () => {
     const article = makeArticle({ id: 1 });
     const analysesById = new Map<number, AiAnalysis>([
-      [1, makeAnalysis({ articleId: 1, watchPoint: '하위규정 확정 여부' })],
+      [1, makeAnalysis({ articleId: 1, watchPoint: '하위규정 확정 여부', implications: ['시사점 A', '시사점 B'] })],
     ]);
 
     const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', analysesById);
 
     expect(html).toContain('하위규정 확정 여부');
-    expect(html).toContain('https://healthcare-radar.vercel.app/article/1');
-    expect(html).toContain('AI 분석 →');
+    expect(html).toContain('시사점 A');
+    expect(html).toContain('시사점 B');
+    expect(html).not.toContain('/article/1');
+    expect(html).not.toContain('AI 분석 →');
   });
 
   it('omits the watch point line when there is no watch point', () => {

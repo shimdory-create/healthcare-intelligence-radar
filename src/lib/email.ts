@@ -28,6 +28,12 @@ function tagsHtml(tags: string[]): string {
   return `<div>${pills}</div>`;
 }
 
+function implicationsHtml(implications: string[]): string {
+  if (implications.length === 0) return '';
+  const items = implications.map((point) => `<li>${escapeHtml(point)}</li>`).join('');
+  return `<ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:#666;">${items}</ul>`;
+}
+
 export function buildDigestHtml(
   articles: ArticleRow[],
   counts: PriorityCounts,
@@ -43,8 +49,8 @@ export function buildDigestHtml(
       <p style="margin:0 0 4px;font-size:12px;color:#666;">${PRIORITY_LABELS[a.priority]} · ${TIER_LABELS[a.tier]} · ${escapeHtml(sourceDisplayName(a.sourceId))} · ${publishedLabel(a.publishedAt)}</p>
       <a href="${escapeHtml(a.url)}" style="font-size:14px;font-weight:600;color:#111;text-decoration:none;">${escapeHtml(a.title)}</a>
       ${analysis ? `<p style="margin:4px 0 0;font-size:12px;color:#666;line-height:1.5;">${escapeHtml(analysis.summary)}</p>` : ''}
+      ${analysis ? implicationsHtml(analysis.implications) : ''}
       ${analysis?.watchPoint ? `<p style="margin:4px 0 0;font-size:11px;color:#999;">Watch: ${escapeHtml(analysis.watchPoint)}</p>` : ''}
-      ${analysis ? `<a href="${escapeHtml(dashboardUrl)}/article/${a.id}" style="display:inline-block;margin-top:4px;font-size:11px;color:#999;text-decoration:none;">AI 분석 →</a>` : ''}
       ${tagsHtml(a.tags)}
     </div>`;
     })
