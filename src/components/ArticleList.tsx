@@ -4,7 +4,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ArticleCard } from './ArticleCard';
 import { ArticleCardMobile } from './ArticleCardMobile';
-import type { ArticleRow, AiAnalysis } from '@/lib/db';
+import type { ArticleRow, AiAnalysis, DuplicateRef } from '@/lib/db';
 
 export function ArticleList({
   articles,
@@ -13,6 +13,7 @@ export function ArticleList({
   hasNextPage,
   buildPageHref,
   analysesById,
+  duplicatesById,
 }: {
   articles: ArticleRow[];
   page: number;
@@ -20,6 +21,7 @@ export function ArticleList({
   hasNextPage: boolean;
   buildPageHref: (page: number) => string;
   analysesById: Map<number, AiAnalysis>;
+  duplicatesById: Map<number, DuplicateRef[]>;
 }) {
   if (articles.length === 0) {
     return <p className="text-muted-foreground py-16 text-center text-sm">조건에 맞는 기사가 없습니다.</p>;
@@ -41,14 +43,14 @@ export function ArticleList({
           </TableHeader>
           <TableBody>
             {articles.map((a) => (
-              <ArticleCard key={a.id} article={a} analysis={analysesById.get(a.id)} />
+              <ArticleCard key={a.id} article={a} analysis={analysesById.get(a.id)} duplicates={duplicatesById.get(a.id) ?? []} />
             ))}
           </TableBody>
         </Table>
       </div>
       <div className="flex flex-col gap-2 py-2 md:hidden">
         {articles.map((a) => (
-          <ArticleCardMobile key={a.id} article={a} analysis={analysesById.get(a.id)} />
+          <ArticleCardMobile key={a.id} article={a} analysis={analysesById.get(a.id)} duplicates={duplicatesById.get(a.id) ?? []} />
         ))}
       </div>
       <div className="flex items-center justify-center gap-2 border-t py-3">

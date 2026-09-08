@@ -1,5 +1,5 @@
 import type { ArticleRow } from './db';
-import { updateArticlePriority } from './db';
+import { updateArticlePriority, setDuplicateOf } from './db';
 import type { PriorityBand } from './priority';
 
 const PRIORITY_RANK: Record<PriorityBand, number> = { high: 3, medium: 2, low: 1 };
@@ -69,6 +69,7 @@ function findGroups(articles: ArticleRow[]): ArticleRow[][] {
 
 export interface DemotionResult {
   demoted: number;
+  grouped: number;
   groups: number;
 }
 
@@ -77,12 +78,18 @@ export interface DemotionResult {
  *  (high->medium, medium->low) so cross-outlet duplicate coverage of one event doesn't
  *  inflate how many "high" items a user sees. Runs after AI enrichment (or the rule-based
  *  fallback) has already set each article's priority -- this is a pass over the result, not
- *  a replacement for it. */
+ *  a replacement for it.
+ *
+ *  Every non-survivor member is also marked via setDuplicateOf, regardless of whether its
+ *  priority actually changed -- grouping (excluding it from listings, showing it as a "같은
+ *  소식" reference under the survivor) is independent of the demotion, e.g. a duplicate that
+ *  was already 'low' still needs to be grouped even though DEMOTE['low'] is a no-op. */
 export async function demoteDuplicatePriorities(articles: ArticleRow[]): Promise<DemotionResult> {
   const groups = findGroups(articles);
   let demoted = 0;
+  let grouped = 0;
   for (const group of groups) {
-    const [, ...rest] = [...group].sort((a, b) => {
+    const [survivor, ...rest] = [...group].sort((a, b) => {
       const rankDiff = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
       if (rankDiff !== 0) return rankDiff;
       return (a.publishedAt?.getTime() ?? 0) - (b.publishedAt?.getTime() ?? 0);
@@ -93,7 +100,9 @@ export async function demoteDuplicatePriorities(articles: ArticleRow[]): Promise
         await updateArticlePriority(article.id, newPriority);
         demoted++;
       }
+      await setDuplicateOf(article.id, survivor.id);
+      grouped++;
     }
   }
-  return { demoted, groups: groups.length };
+  return { demoted, grouped, groups: groups.length };
 }

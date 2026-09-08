@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildDigestHtml } from '@/lib/email';
-import type { ArticleRow, PriorityCounts, AiAnalysis } from '@/lib/db';
+import type { ArticleRow, PriorityCounts, AiAnalysis, DuplicateRef } from '@/lib/db';
 
 const COUNTS: PriorityCounts = { total: 2, high: 1, medium: 1, low: 0 };
 
@@ -86,6 +86,25 @@ describe('buildDigestHtml', () => {
     const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', analysesById);
 
     expect(html).not.toContain('Watch:');
+  });
+
+  it('shows a "같은 소식" line linking to each duplicate when the survivor has duplicates', () => {
+    const article = makeArticle({ id: 1 });
+    const duplicates: DuplicateRef[] = [
+      { id: 2, title: '다른 매체 제목', url: 'https://other-outlet.example.com/2', sourceId: 'healthchosun' },
+    ];
+    const duplicatesById = new Map<number, DuplicateRef[]>([[1, duplicates]]);
+
+    const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app', new Map(), duplicatesById);
+
+    expect(html).toContain('같은 소식');
+    expect(html).toContain('https://other-outlet.example.com/2');
+  });
+
+  it('omits the "같은 소식" line when there are no duplicates', () => {
+    const article = makeArticle({ id: 1 });
+    const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
+    expect(html).not.toContain('같은 소식');
   });
 
   it('escapes HTML-sensitive characters in titles', () => {

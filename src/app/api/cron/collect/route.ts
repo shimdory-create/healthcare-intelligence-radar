@@ -5,6 +5,7 @@ import {
   getPriorityCounts,
   getLatestCollectionDate,
   getAiAnalysesForArticles,
+  getDuplicatesOf,
   type ArticleRow,
   type PriorityCounts,
 } from '@/lib/db';
@@ -34,7 +35,8 @@ async function sendEmailDigest(batch: LatestBatch): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
   const analyses = await getAiAnalysesForArticles(batch.articles.map((a) => a.id));
   const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
-  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), analysesById);
+  const duplicatesById = await getDuplicatesOf(batch.articles.map((a) => a.id));
+  await sendDigestEmail(batch.articles, batch.counts, formatKstDate(batch.collectedDate), analysesById, duplicatesById);
   return 'sent';
 }
 

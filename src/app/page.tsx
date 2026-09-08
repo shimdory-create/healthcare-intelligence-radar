@@ -7,6 +7,7 @@ import {
   getLastCollectedAt,
   getPriorityCounts,
   getAiAnalysesForArticles,
+  getDuplicatesOf,
   type ArticleFilters,
   type PriorityFilter,
 } from '@/lib/db';
@@ -61,6 +62,7 @@ export default async function HomePage({
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const analyses = await getAiAnalysesForArticles(articles.map((a) => a.id));
   const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
+  const duplicatesById = await getDuplicatesOf(articles.map((a) => a.id));
 
   function buildPageHref(targetPage: number): string {
     const query = new URLSearchParams();
@@ -109,6 +111,7 @@ export default async function HomePage({
           hasNextPage={hasNextPage}
           buildPageHref={buildPageHref}
           analysesById={analysesById}
+          duplicatesById={duplicatesById}
         />
       </div>
     </main>

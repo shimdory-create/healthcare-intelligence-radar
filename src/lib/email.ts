@@ -1,4 +1,4 @@
-import type { ArticleRow, PriorityCounts, AiAnalysis } from './db';
+import type { ArticleRow, PriorityCounts, AiAnalysis, DuplicateRef } from './db';
 import { sourceDisplayName, TIER_LABELS } from './sourceLookup';
 import { PRIORITY_LABELS } from './priority';
 
@@ -23,9 +23,9 @@ function publishedLabel(publishedAt: Date | null): string {
 function tagsHtml(tags: string[]): string {
   if (tags.length === 0) return '';
   const pills = tags
-    .map((t) => `<span style="display:inline-block;font-size:11px;color:#666;border:1px solid #e5e5e5;border-radius:5px;padding:1px 6px;margin:4px 4px 0 0;">${escapeHtml(t)}</span>`)
+    .map((t) => `<span style="display:inline-block;font-size:11px;color:#666;border:1px solid #e5e5e5;border-radius:5px;padding:1px 6px;margin:4px 0 0 4px;">${escapeHtml(t)}</span>`)
     .join('');
-  return `<div>${pills}</div>`;
+  return `<div style="text-align:right;">${pills}</div>`;
 }
 
 function implicationsHtml(implications: string[]): string {
@@ -34,12 +34,21 @@ function implicationsHtml(implications: string[]): string {
   return `<ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:#666;">${items}</ul>`;
 }
 
+function duplicatesHtml(duplicates: DuplicateRef[]): string {
+  if (duplicates.length === 0) return '';
+  const links = duplicates
+    .map((d) => `<a href="${escapeHtml(d.url)}" style="color:#999;text-decoration:underline;">${escapeHtml(sourceDisplayName(d.sourceId))}</a>`)
+    .join(', ');
+  return `<p style="margin:4px 0 0;font-size:11px;color:#999;">같은 소식: ${links}</p>`;
+}
+
 export function buildDigestHtml(
   articles: ArticleRow[],
   counts: PriorityCounts,
   dateLabel: string,
   dashboardUrl: string,
   analysesById: Map<number, AiAnalysis> = new Map(),
+  duplicatesById: Map<number, DuplicateRef[]> = new Map(),
 ): string {
   const cards = articles
     .map((a) => {
@@ -51,6 +60,7 @@ export function buildDigestHtml(
       ${analysis ? `<p style="margin:4px 0 0;font-size:12px;color:#666;line-height:1.5;">${escapeHtml(analysis.summary)}</p>` : ''}
       ${analysis ? implicationsHtml(analysis.implications) : ''}
       ${analysis?.watchPoint ? `<p style="margin:4px 0 0;font-size:11px;color:#999;">Watch: ${escapeHtml(analysis.watchPoint)}</p>` : ''}
+      ${duplicatesHtml(duplicatesById.get(a.id) ?? [])}
       ${tagsHtml(a.tags)}
     </div>`;
     })
@@ -82,6 +92,7 @@ export async function sendDigestEmail(
   counts: PriorityCounts,
   dateLabel: string,
   analysesById: Map<number, AiAnalysis> = new Map(),
+  duplicatesById: Map<number, DuplicateRef[]> = new Map(),
 ): Promise<void> {
   if (articles.length === 0) return;
 
@@ -93,7 +104,7 @@ export async function sendDigestEmail(
     throw new Error('RESEND_API_KEY or EMAIL_TO is not set');
   }
 
-  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl(), analysesById);
+  const html = buildDigestHtml(articles, counts, dateLabel, resolveDashboardUrl(), analysesById, duplicatesById);
 
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',

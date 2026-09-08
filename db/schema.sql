@@ -20,15 +20,22 @@ create table if not exists articles (
   score int not null default 0,
   -- initially derived from score at collection time, then overwritten by AI enrichment once
   -- that article is analyzed -- see src/lib/priority.ts and src/lib/aiEnrichment.ts
-  priority text not null default 'low'
+  priority text not null default 'low',
+  -- set by demoteDuplicatePriorities (src/lib/duplicates.ts) when this article is judged to
+  -- cover the same story as another, stronger article collected the same day. Non-null rows
+  -- are excluded from every user-facing listing/count query; the survivor (this column stays
+  -- null on it) shows the others as a "같은 소식" line instead of listing them separately.
+  duplicate_of_id int references articles(id)
 );
 
 -- idempotent for the already-deployed table (create table above is skipped once it exists)
 alter table articles add column if not exists priority text not null default 'low';
+alter table articles add column if not exists duplicate_of_id int references articles(id);
 
 create index if not exists idx_articles_title_norm_published on articles (title_norm, published_at);
 create index if not exists idx_articles_published_at on articles (published_at desc);
 create index if not exists idx_articles_priority on articles (priority);
+create index if not exists idx_articles_duplicate_of on articles (duplicate_of_id);
 
 -- generic key-value store for small pieces of app state (e.g. the Kakao OAuth refresh token)
 -- that need to persist across serverless invocations, unlike a static env var

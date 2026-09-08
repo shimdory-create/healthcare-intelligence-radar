@@ -2,9 +2,17 @@ import { PriorityBadge } from './PriorityBadge';
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { sourceDisplayName, TIER_LABELS } from '@/lib/sourceLookup';
-import type { ArticleRow, AiAnalysis } from '@/lib/db';
+import type { ArticleRow, AiAnalysis, DuplicateRef } from '@/lib/db';
 
-export function ArticleCard({ article, analysis }: { article: ArticleRow; analysis?: AiAnalysis }) {
+export function ArticleCard({
+  article,
+  analysis,
+  duplicates = [],
+}: {
+  article: ArticleRow;
+  analysis?: AiAnalysis;
+  duplicates?: DuplicateRef[];
+}) {
   return (
     <TableRow>
       <TableCell className="text-center">
@@ -34,6 +42,19 @@ export function ArticleCard({ article, analysis }: { article: ArticleRow; analys
               <p className="text-muted-foreground mt-1 text-xs">Watch: {analysis.watchPoint}</p>
             )}
           </>
+        )}
+        {duplicates.length > 0 && (
+          <p className="text-muted-foreground mt-1 text-xs">
+            같은 소식:{' '}
+            {duplicates.map((d, i) => (
+              <span key={d.id}>
+                {i > 0 && ', '}
+                <a href={d.url} target="_blank" rel="noreferrer" className="hover:underline">
+                  {sourceDisplayName(d.sourceId)}
+                </a>
+              </span>
+            ))}
+          </p>
         )}
       </TableCell>
       <TableCell className="whitespace-normal">

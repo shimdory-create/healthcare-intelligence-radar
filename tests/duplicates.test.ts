@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ArticleRow } from '@/lib/db';
 
 const updateArticlePriority = vi.fn();
-vi.mock('@/lib/db', () => ({ updateArticlePriority }));
+const setDuplicateOf = vi.fn();
+vi.mock('@/lib/db', () => ({ updateArticlePriority, setDuplicateOf }));
 
 function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
   return {
@@ -23,6 +24,7 @@ function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
 
 beforeEach(() => {
   updateArticlePriority.mockReset();
+  setDuplicateOf.mockReset();
 });
 
 describe('demoteDuplicatePriorities', () => {
@@ -47,10 +49,11 @@ describe('demoteDuplicatePriorities', () => {
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 1, groups: 1 });
-    // article 1 published first -- kept as-is
+    expect(result).toEqual({ demoted: 1, grouped: 1, groups: 1 });
+    // article 1 published first -- kept as the survivor
     expect(updateArticlePriority).not.toHaveBeenCalledWith(1, expect.anything());
     expect(updateArticlePriority).toHaveBeenCalledWith(2, 'medium');
+    expect(setDuplicateOf).toHaveBeenCalledWith(2, 1);
   });
 
   it('keeps the highest-priority member as the survivor even if published later', async () => {
@@ -76,6 +79,7 @@ describe('demoteDuplicatePriorities', () => {
 
     expect(updateArticlePriority).toHaveBeenCalledTimes(1);
     expect(updateArticlePriority).toHaveBeenCalledWith(1, 'low');
+    expect(setDuplicateOf).toHaveBeenCalledWith(1, 2);
   });
 
   it('does not group same-tag articles whose titles are actually different stories', async () => {
@@ -87,8 +91,9 @@ describe('demoteDuplicatePriorities', () => {
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 0, groups: 0 });
+    expect(result).toEqual({ demoted: 0, grouped: 0, groups: 0 });
     expect(updateArticlePriority).not.toHaveBeenCalled();
+    expect(setDuplicateOf).not.toHaveBeenCalled();
   });
 
   it('does not touch articles with no tags even if titles are similar', async () => {
@@ -100,8 +105,9 @@ describe('demoteDuplicatePriorities', () => {
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 0, groups: 0 });
+    expect(result).toEqual({ demoted: 0, grouped: 0, groups: 0 });
     expect(updateArticlePriority).not.toHaveBeenCalled();
+    expect(setDuplicateOf).not.toHaveBeenCalled();
   });
 
   it('does not group articles that only share a tag with dissimilar titles', async () => {
@@ -113,11 +119,12 @@ describe('demoteDuplicatePriorities', () => {
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 0, groups: 0 });
+    expect(result).toEqual({ demoted: 0, grouped: 0, groups: 0 });
     expect(updateArticlePriority).not.toHaveBeenCalled();
+    expect(setDuplicateOf).not.toHaveBeenCalled();
   });
 
-  it('low stays low (no-op) so it is not counted as demoted', async () => {
+  it('groups a low-priority duplicate even though DEMOTE is a no-op for it', async () => {
     const { demoteDuplicatePriorities } = await import('@/lib/duplicates');
     const articles = [
       makeArticle({ id: 1, tags: ['디지털헬스'], title: '스카이랩스 24시간 혈압 측정 가능성 제시', priority: 'high' }),
@@ -126,7 +133,8 @@ describe('demoteDuplicatePriorities', () => {
 
     const result = await demoteDuplicatePriorities(articles);
 
-    expect(result).toEqual({ demoted: 0, groups: 1 });
+    expect(result).toEqual({ demoted: 0, grouped: 1, groups: 1 });
     expect(updateArticlePriority).not.toHaveBeenCalled();
+    expect(setDuplicateOf).toHaveBeenCalledWith(2, 1);
   });
 });

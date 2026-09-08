@@ -54,6 +54,39 @@ export async function updateArticlePriority(articleId: number, priority: Priorit
   await sql`update articles set priority = ${priority} where id = ${articleId}`;
 }
 
+/** marks `articleId` as covering the same story as `survivorId` -- excludes it from every
+ *  user-facing listing/count query (see buildConditions) in favor of showing it as a "같은
+ *  소식" line under the survivor. Used by demoteDuplicatePriorities. */
+export async function setDuplicateOf(articleId: number, survivorId: number): Promise<void> {
+  await sql`update articles set duplicate_of_id = ${survivorId} where id = ${articleId}`;
+}
+
+export interface DuplicateRef {
+  id: number;
+  title: string;
+  url: string;
+  sourceId: string;
+}
+
+/** for each of `survivorIds`, the other same-story articles grouped under it (see
+ *  setDuplicateOf) -- empty for a survivor with no duplicates. */
+export async function getDuplicatesOf(survivorIds: number[]): Promise<Map<number, DuplicateRef[]>> {
+  const result = new Map<number, DuplicateRef[]>();
+  if (survivorIds.length === 0) return result;
+  const rows = await sql`
+    select id, title, url, source_id, duplicate_of_id
+    from articles
+    where duplicate_of_id = any(${survivorIds})
+    order by published_at asc nulls last
+  `;
+  for (const r of rows as any[]) {
+    const list = result.get(r.duplicate_of_id) ?? [];
+    list.push({ id: r.id, title: r.title, url: r.url, sourceId: r.source_id });
+    result.set(r.duplicate_of_id, list);
+  }
+  return result;
+}
+
 export interface ArticleRow {
   id: number;
   sourceId: string;
@@ -116,7 +149,9 @@ type FacetField = 'tier' | 'priority' | 'tag' | 'sourceId' | 'search' | 'collect
 // `exclude` omits one facet's own condition -- used to compute "what values remain available"
 // for that facet's dropdown given every OTHER active filter (standard faceted-search semantics).
 function buildConditions(filters: ArticleFilters, exclude?: FacetField): any[] {
-  const conditions: any[] = [];
+  // a duplicate-demoted article (see demoteDuplicatePriorities) is never listed on its own --
+  // it only shows up as a "같은 소식" reference under its survivor
+  const conditions: any[] = [sql`a.duplicate_of_id is null`];
   if (exclude !== 'tier' && filters.tier) conditions.push(sql`s.tier = ${filters.tier}`);
   if (exclude !== 'priority' && filters.priority && filters.priority !== 'all') {
     conditions.push(sql`a.priority = ${filters.priority}`);
@@ -263,10 +298,10 @@ export interface PriorityCounts {
 /** counts by priority band for a given collected date (KST), or across all time if omitted --
  *  intentionally ignores tier/source/tag/search so it reads as "today's collection batch", not a filtered subset */
 export async function getPriorityCounts(collectedDate?: string): Promise<PriorityCounts> {
-  let where: any = sql``;
+  let where: any = sql`where a.duplicate_of_id is null`;
   if (collectedDate) {
     const [dayStart, dayEnd] = kstDayRange(collectedDate);
-    where = sql`where a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`;
+    where = sql`${where} and a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`;
   }
   const rows = await sql`
     select
