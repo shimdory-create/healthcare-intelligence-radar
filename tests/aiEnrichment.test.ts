@@ -3,13 +3,13 @@ import type { ArticleRow, AiAnalysis } from '@/lib/db';
 
 const ORIGINAL_ENV = { ...process.env };
 
-const getAiAnalysis = vi.fn();
+const getAiAnalysesForArticles = vi.fn();
 const saveAiAnalysis = vi.fn();
 const updateArticlePriority = vi.fn();
 const analyzeArticles = vi.fn();
 const contentHash = vi.fn((title: string, snippet: string) => `hash:${title}:${snippet}`);
 
-vi.mock('@/lib/db', () => ({ getAiAnalysis, saveAiAnalysis, updateArticlePriority }));
+vi.mock('@/lib/db', () => ({ getAiAnalysesForArticles, saveAiAnalysis, updateArticlePriority }));
 vi.mock('@/lib/gemini', () => ({ analyzeArticles, contentHash }));
 
 function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
@@ -30,7 +30,8 @@ function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
 }
 
 beforeEach(() => {
-  getAiAnalysis.mockReset();
+  getAiAnalysesForArticles.mockReset();
+  getAiAnalysesForArticles.mockResolvedValue([]);
   saveAiAnalysis.mockReset();
   updateArticlePriority.mockReset();
   analyzeArticles.mockReset();
@@ -65,16 +66,14 @@ describe('enrichArticles', () => {
       makeArticle({ id: 1, title: 'A', snippet: 'a' }),
       makeArticle({ id: 2, title: 'B', snippet: 'b' }),
     ];
-    getAiAnalysis.mockImplementation(async (articleId: number) => {
-      if (articleId === 1) return { contentHash: 'hash:A:a' } as AiAnalysis;
-      return null;
-    });
+    getAiAnalysesForArticles.mockResolvedValue([{ articleId: 1, contentHash: 'hash:A:a' } as AiAnalysis]);
     analyzeArticles.mockResolvedValue([
       { articleId: 2, priority: 'high', summary: 's', implications: ['i'], watchPoint: 'w' },
     ]);
 
     const result = await enrichArticles(articles);
 
+    expect(getAiAnalysesForArticles).toHaveBeenCalledWith([1, 2]);
     expect(analyzeArticles).toHaveBeenCalledTimes(1);
     expect(analyzeArticles).toHaveBeenCalledWith([{ id: 2, title: 'B', snippet: 'b' }]);
     expect(saveAiAnalysis).toHaveBeenCalledTimes(1);
@@ -82,7 +81,7 @@ describe('enrichArticles', () => {
       expect.objectContaining({ articleId: 2, contentHash: 'hash:B:b', priority: 'high' }),
     );
     expect(updateArticlePriority).toHaveBeenCalledWith(2, 'high');
-    expect(result).toEqual({ analyzed: 1, cached: 1, skipped: null });
+    expect(result).toEqual({ analyzed: 1, cached: 1, skipped: null, stoppedEarly: false });
   });
 
   it('analyzes every article, batching into chunks of 10 across multiple Gemini calls', async () => {
@@ -90,7 +89,6 @@ describe('enrichArticles', () => {
     const articles = Array.from({ length: 12 }, (_, i) =>
       makeArticle({ id: i + 1, title: `T${i}`, snippet: `s${i}` }),
     );
-    getAiAnalysis.mockResolvedValue(null);
     analyzeArticles.mockResolvedValue([]);
 
     await enrichArticles(articles);
@@ -104,9 +102,48 @@ describe('enrichArticles', () => {
 
   it('propagates a Gemini failure -- the cron route catches it, not this function', async () => {
     const { enrichArticles } = await import('@/lib/aiEnrichment');
-    getAiAnalysis.mockResolvedValue(null);
     analyzeArticles.mockRejectedValue(new Error('quota exceeded'));
 
     await expect(enrichArticles([makeArticle({ id: 1 })])).rejects.toThrow('quota exceeded');
+  });
+
+  it('stops before the deadline and leaves the rest for the rule-based fallback, without erroring', async () => {
+    const { enrichArticles } = await import('@/lib/aiEnrichment');
+    const articles = Array.from({ length: 12 }, (_, i) =>
+      makeArticle({ id: i + 1, title: `T${i}`, snippet: `s${i}` }),
+    );
+    // first batch resolves fine; the deadline is set so the loop should stop before the second
+    analyzeArticles.mockResolvedValue(
+      Array.from({ length: 10 }, (_, i) => ({
+        articleId: i + 1,
+        priority: 'medium' as const,
+        summary: 's',
+        implications: [],
+        watchPoint: '',
+      })),
+    );
+    const realDateNow = Date.now;
+    let call = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => {
+      call++;
+      // first check (before batch 1) passes; second check (before batch 2) is past deadline
+      return call <= 1 ? 1_000 : 2_000;
+    });
+
+    const result = await enrichArticles(articles, 1_500);
+
+    expect(analyzeArticles).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ analyzed: 10, cached: 0, skipped: null, stoppedEarly: true });
+
+    Date.now = realDateNow;
+  });
+
+  it('does not stop early when no deadline is given', async () => {
+    const { enrichArticles } = await import('@/lib/aiEnrichment');
+    analyzeArticles.mockResolvedValue([]);
+
+    const result = await enrichArticles([makeArticle({ id: 1 })]);
+
+    expect(result.stoppedEarly).toBe(false);
   });
 });

@@ -17,6 +17,12 @@ import { demoteDuplicatePriorities } from '@/lib/duplicates';
 
 export const maxDuration = 300;
 
+// Vercel hard-kills this function at maxDuration with no chance for any try/catch to run --
+// so AI enrichment gets its own deadline, well short of that limit, leaving enough of the
+// budget for dedupe + email + kakao (all fast: DB-only or a single outbound call each) to
+// always get their turn even when Gemini is unusually slow that day.
+const AI_RESERVE_MS = 60_000;
+
 interface LatestBatch {
   collectedDate: string;
   articles: ArticleRow[];
@@ -49,6 +55,7 @@ async function sendKakaoDigest(batch: LatestBatch): Promise<string> {
 }
 
 export async function GET(req: NextRequest) {
+  const routeStart = Date.now();
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -66,8 +73,12 @@ export async function GET(req: NextRequest) {
     // AI runs first (and is fully isolated by its own catch) so its priority updates, if any,
     // are ready in time for today's email/kakao -- a failure here must never block delivery.
     const preAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
-    ai = await enrichArticles(preAiArticles)
-      .then((r) => r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`)
+    const aiDeadline = routeStart + maxDuration * 1000 - AI_RESERVE_MS;
+    ai = await enrichArticles(preAiArticles, aiDeadline)
+      .then((r) => {
+        const base = r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`;
+        return r.stoppedEarly ? `${base} (stopped early: time budget)` : base;
+      })
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
     // cross-outlet duplicate coverage of the same story (2+ shared tags, same day) shouldn't
