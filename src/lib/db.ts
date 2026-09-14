@@ -215,7 +215,7 @@ export async function getReportCandidates(collectedDates: string[]): Promise<Can
     select a.id, a.title, a.url, a.tags, a.priority,
       (1 + (select count(*) from articles b where b.duplicate_of_id = a.id))::int as outlet_count
     from articles a
-    where a.collected_at::date = any(${collectedDates}::date[])
+    where (a.collected_at at time zone 'Asia/Seoul')::date = any(${collectedDates}::date[])
       and a.duplicate_of_id is null
       and (
         a.priority = 'high'
