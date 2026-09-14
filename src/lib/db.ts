@@ -203,34 +203,40 @@ export interface CandidateRow {
   url: string;
   tags: string[];
   priority: PriorityBand;
+  /** count of DISTINCT outlets covering the story (the survivor's own source plus every
+   *  distinct source among articles grouped as its duplicate) -- an outlet posting the same
+   *  story more than once (a follow-up, an update) only counts once. Matches
+   *  outletSourceIds.length. */
   outletCount: number;
-  /** source ids of every outlet covering the story (the survivor itself plus every article
-   *  grouped as its duplicate) -- lets the report name the outlets instead of just counting
-   *  them. Length always matches outletCount. */
+  /** distinct source ids of every outlet covering the story. */
   outletSourceIds: string[];
 }
 
 /** candidates for the deep-analysis report pass: every 'high' survivor, plus every
- *  survivor (regardless of its own priority) whose duplicate group has 3+ total outlets
- *  (itself + 2 or more grouped duplicates). `collectedDates` lets Monday's report roll up
- *  Saturday+Sunday+Monday into one call. */
+ *  survivor (regardless of its own priority) whose duplicate group spans 3+ distinct outlets
+ *  (its own source plus 2 or more other distinct sources among its grouped duplicates -- the
+ *  same outlet posting a follow-up to its own story doesn't count as a second outlet).
+ *  `collectedDates` lets a rollup day's report cover more than one calendar date in one call
+ *  (see reportSchedule.ts). */
 export async function getReportCandidates(collectedDates: string[]): Promise<CandidateRow[]> {
   const rows = await sql`
     select a.id, a.title, a.url, a.tags, a.priority,
-      (1 + (select count(*) from articles b where b.duplicate_of_id = a.id))::int as outlet_count,
-      (
-        select array_agg(x.source_id) from (
-          select a.source_id
-          union all
-          select b.source_id from articles b where b.duplicate_of_id = a.id
-        ) x
-      ) as outlet_source_ids
+      coalesce(array_length(o.outlet_source_ids, 1), 1) as outlet_count,
+      coalesce(o.outlet_source_ids, array[a.source_id]) as outlet_source_ids
     from articles a
+    left join lateral (
+      select array_agg(distinct x.source_id) as outlet_source_ids
+      from (
+        select a.source_id
+        union all
+        select b.source_id from articles b where b.duplicate_of_id = a.id
+      ) x
+    ) o on true
     where (a.collected_at at time zone 'Asia/Seoul')::date = any(${collectedDates}::date[])
       and a.duplicate_of_id is null
       and (
         a.priority = 'high'
-        or (select count(*) from articles b where b.duplicate_of_id = a.id) >= 2
+        or coalesce(array_length(o.outlet_source_ids, 1), 1) >= 3
       )
     order by a.id
   `;
