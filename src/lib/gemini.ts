@@ -130,6 +130,10 @@ export interface DeepAnalysisResult {
   category: '국내 보험·제도' | '국내 산업' | 'Global';
   note: string | null;
   bullets: { text: string; subBullets: string[] }[];
+  /** true when the article is supplementary/FYI rather than core news -- e.g. an online-buzz
+   *  or celebrity-mention piece with no direct product/policy/pricing impact. Rendered as a
+   *  "(참고)" prefix on the headline rather than a separate section. */
+  isReference: boolean;
 }
 
 const DEEP_RESPONSE_SCHEMA = {
@@ -148,13 +152,27 @@ const DEEP_RESPONSE_SCHEMA = {
         required: ['text', 'sub_bullets'],
       },
     },
+    is_reference: { type: 'boolean' },
   },
-  required: ['category', 'note', 'bullets'],
+  required: ['category', 'note', 'bullets', 'is_reference'],
 };
 
 function buildDeepPrompt(title: string, fullText: string): string {
   return `당신은 보험사 헬스케어 사업팀의 "Healthcare Market Intelligence" 보고서를 작성하는 애널리스트입니다.
 아래 기사 전문을 읽고, 사내 보고서에 쓸 수 있도록 사실 위주로 정리하세요.
+
+**문체 규칙 (bullets의 text/sub_bullets에 반드시 적용):**
+- 완전한 문장이 아니라 압축된 개조식으로 작성. "~습니다/~합니다/~했다/~이다/~함/~임/~됨" 등 문장 종결 어미를 쓰지 말고, 명사(구)로 끝낼 것.
+- 조사(을/를/이/가/은/는)는 자연스러운 범위에서 생략하고 명사구 중심으로 압축.
+- 기관명은 통용되는 약칭 사용 (예: 건강보험심사평가원→심평원, 국민건강보험공단→공단, 식품의약품안전처→식약처).
+- 수치 비교·추이는 기호로 압축: 순서/추이는 화살표(→), 증감은 %↑ / %↓, 비교 기준은 괄호나 "–"로 병기.
+- 날짜는 숫자로 간결하게 (예: "9월 11일" 대신 "9.11" 또는 문맥상 자연스러우면 "11일").
+
+문체 예시 (아래와 같은 압축도로 작성, 내용은 예시일 뿐 실제 기사 내용만 사용):
+- "심평원, 11일 제약업계 대상 재평가 설명회 개최"
+- "36주차(8.30-9.5) 의사환자 1,000명당 25.3명 – 유행기준(12.9명)의 약 2배, 전년동기(6.6명) 대비 3.8배"
+- "FLUNITY-HD 임상(약 46만명): 표준용량 대비 예방효과 24%↑, 독감 입원율 31.9%↓"
+- "일정: 가산 입증자료 제출(~10월) → 제외대상 목록 공지(추석 전) → 시행목표(내년 4월 1일)"
 
 제목: ${title}
 
@@ -168,8 +186,9 @@ ${fullText.slice(0, 6000)}
   - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
 - note: 기사에 나온 전문용어나 낯선 약어에 대한 한 줄 설명. 없으면 빈 문자열("")
 - bullets: 핵심 사실을 나열한 배열. 각 항목은:
-  - text: 구체적인 수치·날짜·기관명·조건을 포함한 사실 한 문장
-  - sub_bullets: text를 뒷받침하는 더 세부적인 사실들 (없으면 빈 배열 [])
+  - text: 위 문체 규칙을 따른, 구체적인 수치·날짜·기관명·조건을 포함한 압축된 사실 한 줄
+  - sub_bullets: text를 뒷받침하는 더 세부적인 사실들, 같은 문체 규칙 적용 (없으면 빈 배열 [])
+- is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
 
 지어내지 말고, 본문에 실제로 나온 내용만 사용하세요. 불필요하게 길게 쓰지 마세요.`;
 }
@@ -183,11 +202,13 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
     category: DeepAnalysisResult['category'];
     note: string;
     bullets: { text: string; sub_bullets: string[] }[];
+    is_reference: boolean;
   };
 
   return {
     category: parsed.category,
     note: parsed.note || null,
     bullets: parsed.bullets.map((b) => ({ text: b.text, subBullets: b.sub_bullets })),
+    isReference: parsed.is_reference,
   };
 }

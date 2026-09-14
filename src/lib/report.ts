@@ -11,6 +11,9 @@ export interface ReportItem {
   headline: string;
   note: string | null;
   bullets: ReportBullet[];
+  /** true for supplementary/FYI items (e.g. online-buzz pieces with no direct policy/product
+   *  impact) -- rendered as a "(참고) " headline prefix rather than a separate section. */
+  isReference: boolean;
 }
 
 export interface ReportSection {
@@ -53,7 +56,8 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
               return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${subHtml}`;
             })
             .join('');
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(item.headline)}</p>${noteHtml}${bulletsHtml}`;
+          const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${noteHtml}${bulletsHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -99,7 +103,7 @@ export function buildReportSections(
       note = note ? `${outletNote} — ${note}` : outletNote;
     }
 
-    byName.get(sectionName)!.push({ headline: candidate.title, note, bullets });
+    byName.get(sectionName)!.push({ headline: candidate.title, note, bullets, isReference: deep?.isReference ?? false });
   }
 
   return SECTION_ORDER.map((title) => ({ title, items: byName.get(title)! })).filter(
@@ -203,7 +207,7 @@ export async function buildReportDocx(
   sections.forEach((section, sectionIndex) => {
     children.push(sectionHeadingPara(`${sectionIndex + 1}. ${section.title}`));
     for (const item of section.items) {
-      children.push(headlinePara(item.headline));
+      children.push(headlinePara(item.isReference ? `(참고) ${item.headline}` : item.headline));
       if (item.note) children.push(notePara(item.note));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));

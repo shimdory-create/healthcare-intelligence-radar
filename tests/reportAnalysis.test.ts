@@ -29,7 +29,12 @@ describe('analyzeCandidatesDeep', () => {
   it('returns a deep result for each candidate whose fetch and analysis both succeed', async () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue('본문 전체');
-    analyzeDeep.mockResolvedValue({ category: '국내 산업', note: null, bullets: [{ text: 't', subBullets: [] }] });
+    analyzeDeep.mockResolvedValue({
+      category: '국내 산업',
+      note: null,
+      bullets: [{ text: 't', subBullets: [] }],
+      isReference: false,
+    });
 
     const result = await analyzeCandidatesDeep([makeCandidate({ id: 5 })]);
 
@@ -38,6 +43,7 @@ describe('analyzeCandidatesDeep', () => {
       category: '국내 산업',
       note: null,
       bullets: [{ text: 't', subBullets: [] }],
+      isReference: false,
     });
   });
 

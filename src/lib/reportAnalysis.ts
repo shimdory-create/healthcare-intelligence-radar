@@ -7,6 +7,7 @@ export interface CandidateDeepResult {
   category: DeepAnalysisResult['category'];
   note: string | null;
   bullets: DeepAnalysisResult['bullets'];
+  isReference: boolean;
 }
 
 /** runs the fetch+extract+Gemini deep-analysis pipeline for each candidate, stopping
