@@ -146,4 +146,33 @@ describe('enrichArticles', () => {
 
     expect(result.stoppedEarly).toBe(false);
   });
+
+  it('never sends an article whose rule-based priority is already low', async () => {
+    const { enrichArticles } = await import('@/lib/aiEnrichment');
+    const articles = [
+      makeArticle({ id: 1, title: 'A', snippet: 'a', priority: 'low' }),
+      makeArticle({ id: 2, title: 'B', snippet: 'b', priority: 'medium' }),
+    ];
+    getAiAnalysesForArticles.mockResolvedValue([]);
+    analyzeArticles.mockResolvedValue([
+      { articleId: 2, priority: 'high', summary: 's', implications: ['i'], watchPoint: 'w' },
+    ]);
+
+    const result = await enrichArticles(articles);
+
+    expect(analyzeArticles).toHaveBeenCalledTimes(1);
+    expect(analyzeArticles).toHaveBeenCalledWith([{ id: 2, title: 'B', snippet: 'b' }]);
+    expect(result).toEqual({ analyzed: 1, cached: 0, skipped: null, stoppedEarly: false });
+  });
+
+  it('skips Gemini entirely and reports skipped when every article is already low', async () => {
+    const { enrichArticles } = await import('@/lib/aiEnrichment');
+    const articles = [makeArticle({ id: 1, priority: 'low' })];
+    getAiAnalysesForArticles.mockResolvedValue([]);
+
+    const result = await enrichArticles(articles);
+
+    expect(analyzeArticles).not.toHaveBeenCalled();
+    expect(result).toEqual({ analyzed: 0, cached: 0, skipped: null, stoppedEarly: false });
+  });
 });

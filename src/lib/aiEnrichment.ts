@@ -40,6 +40,12 @@ export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number
   const toAnalyze: { id: number; title: string; snippet: string; hash: string }[] = [];
   let cached = 0;
   for (const a of articles) {
+    // articles already at rule-based 'low' (keyword score 0) are almost always genuinely
+    // low-relevance or untagged notices -- skipping them here roughly halves the daily
+    // Gemini workload, which is what makes the report's deep-analysis pass (a separate,
+    // later phase) fit inside the same time budget.
+    if (a.priority === 'low') continue;
+
     const hash = contentHash(a.title, a.snippet ?? '');
     const existing = existingByArticleId.get(a.id);
     if (existing && existing.contentHash === hash) {
