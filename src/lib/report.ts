@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, AlignmentType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, LineRuleType } from 'docx';
 import type { ReportCandidate } from './reportCandidates';
 import type { CandidateDeepResult } from './reportAnalysis';
 
@@ -67,44 +67,56 @@ export function buildReportSections(
 
 const FONT = '바탕체';
 
+// 1.2x multiple line spacing throughout -- docx's "auto" line rule treats 240 as single
+// spacing, so 1.2x is 240*1.2 = 288. Spread into every paragraph's `spacing` alongside its
+// own before/after values.
+const LINE_SPACING = { line: 288, lineRule: LineRuleType.AUTO };
+
+// Title is 22pt; everything else in the body (dates, headings, headlines, bullets, closing)
+// is a uniform 14pt except the "* " glossary notes, which are 10pt -- docx sizes are in
+// half-points, so these are 44/28/20 respectively.
+const TITLE_SIZE = 44;
+const BODY_SIZE = 28;
+const NOTE_SIZE = 20;
+
 function titlePara(text: string): Paragraph {
   return new Paragraph({
     alignment: AlignmentType.CENTER,
-    children: [new TextRun({ text, bold: true, size: 32, font: FONT, underline: {} })],
-    spacing: { after: 200 },
+    children: [new TextRun({ text, bold: true, size: TITLE_SIZE, font: FONT, underline: {} })],
+    spacing: { after: 200, ...LINE_SPACING },
   });
 }
 
 function dateLinePara(text: string): Paragraph {
   return new Paragraph({
     alignment: AlignmentType.RIGHT,
-    children: [new TextRun({ text, size: 20, font: FONT })],
-    spacing: { after: 300 },
+    children: [new TextRun({ text, size: BODY_SIZE, font: FONT })],
+    spacing: { after: 300, ...LINE_SPACING },
   });
 }
 
 function sectionHeadingPara(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text, bold: true, size: 24, font: FONT })],
-    spacing: { before: 300, after: 150 },
+    children: [new TextRun({ text, bold: true, size: BODY_SIZE, font: FONT })],
+    spacing: { before: 300, after: 150, ...LINE_SPACING },
   });
 }
 
 function headlinePara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '□ ', bold: true, size: 21, font: FONT }),
-      new TextRun({ text, bold: true, underline: {}, size: 21, font: FONT }),
+      new TextRun({ text: '□ ', bold: true, size: BODY_SIZE, font: FONT }),
+      new TextRun({ text, bold: true, underline: {}, size: BODY_SIZE, font: FONT }),
     ],
-    spacing: { before: 200, after: 40 },
+    spacing: { before: 200, after: 40, ...LINE_SPACING },
     indent: { left: 460, hanging: 260 },
   });
 }
 
 function notePara(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: `* ${text}`, italics: true, size: 17, font: FONT, color: '555555' })],
-    spacing: { after: 60 },
+    children: [new TextRun({ text: `* ${text}`, italics: true, size: NOTE_SIZE, font: FONT, color: '555555' })],
+    spacing: { after: 60, ...LINE_SPACING },
     indent: { left: 800, hanging: 180 },
   });
 }
@@ -112,10 +124,10 @@ function notePara(text: string): Paragraph {
 function bulletPara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '- ', size: 20, font: FONT }),
-      new TextRun({ text, size: 20, font: FONT }),
+      new TextRun({ text: '- ', size: BODY_SIZE, font: FONT }),
+      new TextRun({ text, size: BODY_SIZE, font: FONT }),
     ],
-    spacing: { after: 60 },
+    spacing: { after: 60, ...LINE_SPACING },
     indent: { left: 620, hanging: 200 },
   });
 }
@@ -123,19 +135,19 @@ function bulletPara(text: string): Paragraph {
 function subBulletPara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '· ', size: 19, font: FONT }),
-      new TextRun({ text, size: 19, font: FONT }),
+      new TextRun({ text: '· ', size: BODY_SIZE, font: FONT }),
+      new TextRun({ text, size: BODY_SIZE, font: FONT }),
     ],
-    spacing: { after: 40 },
+    spacing: { after: 40, ...LINE_SPACING },
     indent: { left: 880, hanging: 200 },
   });
 }
 
 function closingPara(): Paragraph {
   return new Paragraph({
-    alignment: AlignmentType.CENTER,
-    children: [new TextRun({ text: '- 이상 -', size: 20, font: FONT })],
-    spacing: { before: 400 },
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ text: '- 이 상 -', size: BODY_SIZE, font: FONT })],
+    spacing: { before: 400, ...LINE_SPACING },
   });
 }
 
