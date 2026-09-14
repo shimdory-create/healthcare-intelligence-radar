@@ -18,6 +18,7 @@ import { getCandidatesForReport } from '@/lib/reportCandidates';
 import { analyzeCandidatesDeep } from '@/lib/reportAnalysis';
 import { buildReportSections, buildReportDocx, buildReportEmailHtml } from '@/lib/report';
 import { reportDateRange } from '@/lib/reportSchedule';
+import { isNonBusinessDay } from '@/lib/holidays';
 
 export const maxDuration = 300;
 
@@ -158,14 +159,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // re-fetched again so the batch reflects both AI-updated and dedupe-demoted priorities
-    // rather than an earlier snapshot
-    const batch = await loadBatch(collectedDate);
+    if (isNonBusinessDay(collectedDate)) {
+      // Collection, AI enrichment, dedupe, and (on Mondays) the rolled-up report still run
+      // every day -- skipping them on non-business days would either leave that day's
+      // priorities unclassified when a later business day needs them, or force a multi-day
+      // backlog through one run's time budget. Only the actual send is skipped here.
+      email = 'skipped: non-business day';
+      kakao = 'skipped: non-business day';
+    } else {
+      // re-fetched again so the batch reflects both AI-updated and dedupe-demoted priorities
+      // rather than an earlier snapshot
+      const batch = await loadBatch(collectedDate);
 
-    email = await sendEmailDigest(batch, reportHtml, reportDocxBuffer).catch(
-      (err) => `error: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+      email = await sendEmailDigest(batch, reportHtml, reportDocxBuffer).catch(
+        (err) => `error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   return NextResponse.json({ summary, email, kakao, ai, dedupe, report });
