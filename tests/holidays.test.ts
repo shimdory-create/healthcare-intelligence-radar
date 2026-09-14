@@ -39,25 +39,51 @@ describe('isNonBusinessDay', () => {
     }
   });
 
-  it('returns false for an ordinary weekday in a year with no holiday list configured', () => {
-    expect(isNonBusinessDay('2027-06-15')).toBe(false); // Tuesday, no 2027 entries yet
+  it('returns false for an ordinary weekday with no matching holiday entry', () => {
+    expect(isNonBusinessDay('2027-06-15')).toBe(false); // Tuesday, not a holiday
   });
 
-  it('applies fixed no-substitute holidays permanently, with no yearly entry needed', () => {
-    expect(isNonBusinessDay('2027-01-01')).toBe(true); // 신정, Friday, no 2027 entries exist
+  it('applies fixed no-substitute holidays permanently, in a year with no lunar/substitute entries at all', () => {
+    expect(isNonBusinessDay('2042-01-01')).toBe(true); // 신정, Wednesday, beyond the configured table
   });
 
-  it('applies the base date of a substitute-eligible fixed holiday permanently, with no yearly entry needed', () => {
-    expect(isNonBusinessDay('2027-05-05')).toBe(true); // 어린이날, Wednesday, no 2027 entries exist
+  it('applies the base date of a substitute-eligible fixed holiday permanently, in a year with no lunar/substitute entries at all', () => {
+    expect(isNonBusinessDay('2042-05-05')).toBe(true); // 어린이날, Monday, beyond the configured table
   });
 
   it('does not know about a substitute day for a fixed holiday in a year with no entry', () => {
-    // if a 2027 FIXED_SUBSTITUTE_ELIGIBLE date lands on a weekend, its substitute weekday
-    // needs a 2027 WEEKDAY_HOLIDAYS entry to be caught -- this documents that gap, not a bug
-    expect(isNonBusinessDay('2027-08-16')).toBe(false); // hypothetical substitute Monday, not listed
+    // if a FIXED_SUBSTITUTE_ELIGIBLE date lands on a weekend in a year beyond the configured
+    // table, its substitute weekday needs a WEEKDAY_HOLIDAYS entry to be caught -- this
+    // documents that gap, not a bug
+    expect(isNonBusinessDay('2042-08-18')).toBe(false); // hypothetical substitute Monday, not listed
   });
 
-  it('does not catch a lunar-calendar holiday in a year with no entry', () => {
-    expect(isNonBusinessDay('2027-02-08')).toBe(false); // hypothetical Seollal-adjacent date, not listed
+  it('does not catch a lunar-calendar holiday in a year beyond the configured table', () => {
+    expect(isNonBusinessDay('2042-02-10')).toBe(false); // hypothetical Seollal-adjacent date, not listed
+  });
+
+  // Spot checks against the computed 2026-2041 table (korean_lunar_calendar / KASI-based
+  // conversion, cross-verified 2026-09-15 -- see holidays.ts's module comment). A scraped wiki
+  // table used during generation had off-by-one errors on more than one entry, so these lock
+  // in specific known-correct dates rather than trusting the source blindly.
+  it('gets 2027 Seollal right (a case a since-discarded scraped source got wrong by one day)', () => {
+    expect(isNonBusinessDay('2027-02-06')).toBe(true); // Saturday (weekend, not Seollal itself)
+    expect(isNonBusinessDay('2027-02-07')).toBe(true); // Sunday, actual Seollal
+    expect(isNonBusinessDay('2027-02-08')).toBe(true); // Monday, day after
+    expect(isNonBusinessDay('2027-02-09')).toBe(true); // Tuesday, substitute (Seollal overlapped Sunday)
+    expect(isNonBusinessDay('2027-02-10')).toBe(false); // Wednesday, back to normal
+  });
+
+  it('does not add a substitute for 설날/추석 when they only overlap a Saturday, not a Sunday', () => {
+    // 2028 Chuseok: Oct 2 (Mon), Oct 3 (Tue, actual), Oct 4 (Wed) -- no Sunday in the span
+    expect(isNonBusinessDay('2028-10-02')).toBe(true);
+    expect(isNonBusinessDay('2028-10-03')).toBe(true);
+    expect(isNonBusinessDay('2028-10-04')).toBe(true);
+    expect(isNonBusinessDay('2028-10-05')).toBe(false); // Thursday, no substitute needed
+  });
+
+  it('handles a year with multiple fixed-holiday substitutes landing close together (2032)', () => {
+    expect(isNonBusinessDay('2032-10-04')).toBe(true); // 개천절 대체공휴일 (10/3 Sat)
+    expect(isNonBusinessDay('2032-10-11')).toBe(true); // 한글날 대체공휴일 (10/9 Sat)
   });
 });
