@@ -197,6 +197,42 @@ export async function getRecentArticles(filters: ArticleFilters = {}): Promise<A
   return { articles: rows.slice(0, limit).map(rowToArticle), hasNextPage };
 }
 
+export interface CandidateRow {
+  id: number;
+  title: string;
+  url: string;
+  tags: string[];
+  priority: PriorityBand;
+  outletCount: number;
+}
+
+/** candidates for the deep-analysis report pass: every 'high' survivor, plus every
+ *  survivor (regardless of its own priority) whose duplicate group has 3+ total outlets
+ *  (itself + 2 or more grouped duplicates). `collectedDates` lets Monday's report roll up
+ *  Saturday+Sunday+Monday into one call. */
+export async function getReportCandidates(collectedDates: string[]): Promise<CandidateRow[]> {
+  const rows = await sql`
+    select a.id, a.title, a.url, a.tags, a.priority,
+      (1 + (select count(*) from articles b where b.duplicate_of_id = a.id))::int as outlet_count
+    from articles a
+    where a.collected_at::date = any(${collectedDates}::date[])
+      and a.duplicate_of_id is null
+      and (
+        a.priority = 'high'
+        or (select count(*) from articles b where b.duplicate_of_id = a.id) >= 2
+      )
+    order by a.id
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    url: r.url,
+    tags: r.tags,
+    priority: r.priority,
+    outletCount: r.outlet_count,
+  }));
+}
+
 /** total matching rows for the given filters -- used only to size numbered pagination */
 export async function getArticlesTotalCount(filters: ArticleFilters = {}): Promise<number> {
   const where = buildWhere(buildConditions(filters));
