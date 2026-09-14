@@ -26,12 +26,22 @@ export const maxDuration = 300;
 // so AI enrichment gets its own deadline, well short of that limit, leaving enough of the
 // budget for dedupe + email + kakao (all fast: DB-only or a single outbound call each) to
 // always get their turn even when Gemini is unusually slow that day.
-const AI_RESERVE_MS = 60_000;
+//
+// INVARIANT: aiDeadline must always be meaningfully earlier than reportDeadline. AI
+// enrichment runs first, and the deep-analysis report phase (below) needs real wall-clock
+// time left over after AI finishes -- if reportDeadline is earlier (or too close), AI
+// running its full budget (it has, in production, on 2026-09-10 and 2026-09-11) silently
+// leaves no time for the report phase to do anything at all. Values here match the design
+// spec's own §6 time-budget table (aiDeadline = routeStart + 130s, reportDeadline =
+// routeStart + 220s).
+const AI_RESERVE_MS = 170_000;
 
 // Same reasoning as AI_RESERVE_MS: the deep-analysis report phase (fetch + Readability +
 // Gemini per candidate) gets its own deadline, reserved out of the same overall wall-clock
-// budget, so dedupe + loadBatch + email + kakao always still get their turn.
-const REPORT_RESERVE_MS = 90_000;
+// budget, so dedupe + loadBatch + email + kakao always still get their turn. See the
+// INVARIANT note on AI_RESERVE_MS above -- this must stay meaningfully smaller than
+// AI_RESERVE_MS (i.e. reportDeadline meaningfully later than aiDeadline).
+const REPORT_RESERVE_MS = 80_000;
 
 /** returns the KST collected-date(s) this report run should cover, or null on a weekend (no
  *  report). Monday rolls up Saturday+Sunday+Monday since a weekend's volume is too thin to
