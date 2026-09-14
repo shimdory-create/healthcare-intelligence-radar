@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { analyzeArticles, contentHash } from '@/lib/gemini';
+import { analyzeArticles, analyzeDeep, contentHash } from '@/lib/gemini';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -71,5 +71,31 @@ describe('analyzeArticles', () => {
       vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [] }) }),
     );
     await expect(analyzeArticles([{ id: 1, title: 't', snippet: 's' }])).rejects.toThrow('missing content');
+  });
+});
+
+describe('analyzeDeep', () => {
+  it('parses a valid deep-analysis response', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 산업',
+        note: '',
+        bullets: [{ text: '9월 8일부터 전국 공급 개시', sub_bullets: ['표준용량 대비 항원 4배'] }],
+      }),
+    );
+
+    const result = await analyzeDeep('사노피 독감백신 공급', '본문 전체 텍스트...');
+
+    expect(result).toEqual({
+      category: '국내 산업',
+      note: null,
+      bullets: [{ text: '9월 8일부터 전국 공급 개시', subBullets: ['표준용량 대비 항원 4배'] }],
+    });
+  });
+
+  it('throws when GEMINI_API_KEY is not set, same as analyzeArticles', async () => {
+    delete process.env.GEMINI_API_KEY;
+    await expect(analyzeDeep('제목', '본문')).rejects.toThrow('GEMINI_API_KEY');
   });
 });

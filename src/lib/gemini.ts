@@ -78,10 +78,7 @@ implications는 그럴듯하게 지어내지 말고, 실제로 근거가 있을 
 불필요하게 길게 쓰지 마세요.`;
 }
 
-/** sends up to ~10 articles in a single Gemini request and returns per-article analysis.
- *  Throws on any failure (missing key, quota, network, malformed response) -- callers must
- *  catch this and fall back to the rule-based system; AI analysis is always optional. */
-export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<GeminiAnalysisItem[]> {
+async function callGemini(prompt: string, schema: object): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
   const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
@@ -92,11 +89,8 @@ export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<G
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(articles) }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-        },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
       }),
       signal: AbortSignal.timeout(30000),
     },
@@ -108,8 +102,14 @@ export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<G
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== 'string') throw new Error('Gemini response missing content');
+  return JSON.parse(text);
+}
 
-  const parsed = JSON.parse(text) as Array<{
+/** sends up to ~10 articles in a single Gemini request and returns per-article analysis.
+ *  Throws on any failure (missing key, quota, network, malformed response) -- callers must
+ *  catch this and fall back to the rule-based system; AI analysis is always optional. */
+export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<GeminiAnalysisItem[]> {
+  const parsed = (await callGemini(buildPrompt(articles), RESPONSE_SCHEMA)) as Array<{
     article_id: number;
     priority: PriorityBand;
     summary: string;
@@ -124,4 +124,70 @@ export async function analyzeArticles(articles: GeminiArticleInput[]): Promise<G
     implications: p.implications,
     watchPoint: p.watch_point,
   }));
+}
+
+export interface DeepAnalysisResult {
+  category: '국내 보험·제도' | '국내 산업' | 'Global';
+  note: string | null;
+  bullets: { text: string; subBullets: string[] }[];
+}
+
+const DEEP_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    category: { type: 'string', enum: ['국내 보험·제도', '국내 산업', 'Global'] },
+    note: { type: 'string' },
+    bullets: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          sub_bullets: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['text', 'sub_bullets'],
+      },
+    },
+  },
+  required: ['category', 'note', 'bullets'],
+};
+
+function buildDeepPrompt(title: string, fullText: string): string {
+  return `당신은 보험사 헬스케어 사업팀의 "Healthcare Market Intelligence" 보고서를 작성하는 애널리스트입니다.
+아래 기사 전문을 읽고, 사내 보고서에 쓸 수 있도록 사실 위주로 정리하세요.
+
+제목: ${title}
+
+본문:
+${fullText.slice(0, 6000)}
+
+다음 필드를 포함한 JSON 객체 하나로만 응답하세요 (다른 텍스트 없이):
+- category: 이 기사가 속할 분류를 아래 세 가지 중 하나로 판정
+  - "국내 보험·제도": 국내 보험사·건강보험·정부 제도/정책 관련
+  - "국내 산업": 국내 제약사·의료기기·헬스케어 기업의 사업 활동
+  - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
+- note: 기사에 나온 전문용어나 낯선 약어에 대한 한 줄 설명. 없으면 빈 문자열("")
+- bullets: 핵심 사실을 나열한 배열. 각 항목은:
+  - text: 구체적인 수치·날짜·기관명·조건을 포함한 사실 한 문장
+  - sub_bullets: text를 뒷받침하는 더 세부적인 사실들 (없으면 빈 배열 [])
+
+지어내지 말고, 본문에 실제로 나온 내용만 사용하세요. 불필요하게 길게 쓰지 마세요.`;
+}
+
+/** deep, fact-dense analysis of a single article's full text for the Market Intelligence
+ *  report -- distinct from analyzeArticles' short daily-digest summary. Throws on any
+ *  failure; callers (reportAnalysis.ts) catch per-candidate and fall back to the existing
+ *  short summary rather than dropping the article or failing the whole report. */
+export async function analyzeDeep(title: string, fullText: string): Promise<DeepAnalysisResult> {
+  const parsed = (await callGemini(buildDeepPrompt(title, fullText), DEEP_RESPONSE_SCHEMA)) as {
+    category: DeepAnalysisResult['category'];
+    note: string;
+    bullets: { text: string; sub_bullets: string[] }[];
+  };
+
+  return {
+    category: parsed.category,
+    note: parsed.note || null,
+    bullets: parsed.bullets.map((b) => ({ text: b.text, subBullets: b.sub_bullets })),
+  };
 }
