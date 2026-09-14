@@ -39,7 +39,25 @@ describe('isNonBusinessDay', () => {
     }
   });
 
-  it('returns false for a weekday in a year with no holiday list configured', () => {
+  it('returns false for an ordinary weekday in a year with no holiday list configured', () => {
     expect(isNonBusinessDay('2027-06-15')).toBe(false); // Tuesday, no 2027 entries yet
+  });
+
+  it('applies fixed no-substitute holidays permanently, with no yearly entry needed', () => {
+    expect(isNonBusinessDay('2027-01-01')).toBe(true); // 신정, Friday, no 2027 entries exist
+  });
+
+  it('applies the base date of a substitute-eligible fixed holiday permanently, with no yearly entry needed', () => {
+    expect(isNonBusinessDay('2027-05-05')).toBe(true); // 어린이날, Wednesday, no 2027 entries exist
+  });
+
+  it('does not know about a substitute day for a fixed holiday in a year with no entry', () => {
+    // if a 2027 FIXED_SUBSTITUTE_ELIGIBLE date lands on a weekend, its substitute weekday
+    // needs a 2027 WEEKDAY_HOLIDAYS entry to be caught -- this documents that gap, not a bug
+    expect(isNonBusinessDay('2027-08-16')).toBe(false); // hypothetical substitute Monday, not listed
+  });
+
+  it('does not catch a lunar-calendar holiday in a year with no entry', () => {
+    expect(isNonBusinessDay('2027-02-08')).toBe(false); // hypothetical Seollal-adjacent date, not listed
   });
 });
