@@ -15,8 +15,8 @@ export interface CandidateDeepResult {
 /** runs the fetch+extract+Gemini deep-analysis pipeline for each candidate, stopping
  *  before `deadlineMs` (same pattern as enrichArticles' time-budget guard) rather than
  *  risking the platform's wall-clock kill. A candidate that fails at any step (fetch,
- *  extraction, or Gemini) is simply left out of the returned map -- report.ts falls back
- *  to that article's existing short summary rather than dropping it or failing the run. */
+ *  extraction, or Gemini) is simply left out of the returned map -- report.ts omits that
+ *  candidate from the report entirely rather than failing the whole run. */
 export async function analyzeCandidatesDeep(
   candidates: ReportCandidate[],
   deadlineMs?: number,

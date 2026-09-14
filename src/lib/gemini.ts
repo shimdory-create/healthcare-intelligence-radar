@@ -216,8 +216,8 @@ ${fullText.slice(0, 6000)}
 
 /** deep, fact-dense analysis of a single article's full text for the Market Intelligence
  *  report -- distinct from analyzeArticles' short daily-digest summary. Throws on any
- *  failure; callers (reportAnalysis.ts) catch per-candidate and fall back to the existing
- *  short summary rather than dropping the article or failing the whole report. */
+ *  failure; callers (reportAnalysis.ts) catch per-candidate and simply omit that candidate
+ *  from the report rather than failing the whole run. */
 export async function analyzeDeep(title: string, fullText: string): Promise<DeepAnalysisResult> {
   const parsed = (await callGemini(buildDeepPrompt(title, fullText), DEEP_RESPONSE_SCHEMA)) as {
     category: DeepAnalysisResult['category'];
