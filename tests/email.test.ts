@@ -133,6 +133,7 @@ describe('buildDigestHtml', () => {
       reportImageBuffer,
     );
 
+    expect(html.indexOf('cid:report-preview')).toBeGreaterThan(-1);
     expect(html.indexOf('cid:report-preview')).toBeLessThan(html.indexOf(article.title));
   });
 
