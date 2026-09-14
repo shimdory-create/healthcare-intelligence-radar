@@ -11,6 +11,10 @@ export interface ReportItem {
   headline: string;
   note: string | null;
   bullets: ReportBullet[];
+  /** background/context about a company or institution named in the item (e.g. a past
+   *  certification, an unrelated business line) -- rendered with a "※ " prefix after the
+   *  bullets, distinct from `note`'s term-glossary role. */
+  background: string | null;
   /** true for supplementary/FYI items (e.g. online-buzz pieces with no direct policy/product
    *  impact) -- rendered as a "(참고) " headline prefix rather than a separate section. */
   isReference: boolean;
@@ -56,8 +60,11 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
               return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${subHtml}`;
             })
             .join('');
+          const backgroundHtml = item.background
+            ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
+            : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${noteHtml}${bulletsHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${noteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -103,7 +110,14 @@ export function buildReportSections(
       note = note ? `${outletNote} — ${note}` : outletNote;
     }
 
-    byName.get(sectionName)!.push({ headline: candidate.title, note, bullets, isReference: deep?.isReference ?? false });
+    // the deep-analysis headline replaces the source article's own (news-style) title -- see
+    // buildDeepPrompt's headline rules; a fallback item has no rewritten headline available,
+    // so it keeps the raw article title
+    const headline = deep?.headline ?? candidate.title;
+
+    byName
+      .get(sectionName)!
+      .push({ headline, note, bullets, background: deep?.background ?? null, isReference: deep?.isReference ?? false });
   }
 
   return SECTION_ORDER.map((title) => ({ title, items: byName.get(title)! })).filter(
@@ -167,6 +181,14 @@ function notePara(text: string): Paragraph {
   });
 }
 
+function backgroundPara(text: string): Paragraph {
+  return new Paragraph({
+    children: [new TextRun({ text: `※ ${text}`, size: NOTE_SIZE, font: FONT, color: '555555' })],
+    spacing: { before: 40, after: 60, ...LINE_SPACING },
+    indent: { left: 460, hanging: 260 },
+  });
+}
+
 function bulletPara(text: string): Paragraph {
   return new Paragraph({
     children: [
@@ -213,6 +235,7 @@ export async function buildReportDocx(
         children.push(bulletPara(bullet.text));
         for (const sub of bullet.subBullets) children.push(subBulletPara(sub));
       }
+      if (item.background) children.push(backgroundPara(item.background));
     }
   });
 

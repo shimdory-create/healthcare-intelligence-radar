@@ -80,8 +80,11 @@ describe('analyzeDeep', () => {
     mockGeminiResponse(
       JSON.stringify({
         category: '국내 산업',
+        headline: '사노피, 독감백신 전국 공급 개시',
         note: '',
         bullets: [{ text: '9월 8일부터 전국 공급 개시', sub_bullets: ['표준용량 대비 항원 4배'] }],
+        background: '',
+        is_reference: false,
       }),
     );
 
@@ -89,8 +92,11 @@ describe('analyzeDeep', () => {
 
     expect(result).toEqual({
       category: '국내 산업',
+      headline: '사노피, 독감백신 전국 공급 개시',
       note: null,
       bullets: [{ text: '9월 8일부터 전국 공급 개시', subBullets: ['표준용량 대비 항원 4배'] }],
+      background: null,
+      isReference: false,
     });
   });
 

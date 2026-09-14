@@ -31,8 +31,10 @@ describe('analyzeCandidatesDeep', () => {
     extractArticleText.mockResolvedValue('본문 전체');
     analyzeDeep.mockResolvedValue({
       category: '국내 산업',
+      headline: '요약 헤드라인',
       note: null,
       bullets: [{ text: 't', subBullets: [] }],
+      background: null,
       isReference: false,
     });
 
@@ -41,8 +43,10 @@ describe('analyzeCandidatesDeep', () => {
     expect(result.get(5)).toEqual({
       articleId: 5,
       category: '국내 산업',
+      headline: '요약 헤드라인',
       note: null,
       bullets: [{ text: 't', subBullets: [] }],
+      background: null,
       isReference: false,
     });
   });
@@ -62,7 +66,7 @@ describe('analyzeCandidatesDeep', () => {
     extractArticleText.mockResolvedValue('본문');
     analyzeDeep
       .mockRejectedValueOnce(new Error('quota exceeded'))
-      .mockResolvedValueOnce({ category: 'Global', note: null, bullets: [] });
+      .mockResolvedValueOnce({ category: 'Global', headline: 'h', note: null, bullets: [], background: null, isReference: false });
 
     const result = await analyzeCandidatesDeep([makeCandidate({ id: 7 }), makeCandidate({ id: 8 })]);
 
@@ -73,7 +77,7 @@ describe('analyzeCandidatesDeep', () => {
   it('stops before the deadline and leaves the rest for the fallback path', async () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue('본문');
-    analyzeDeep.mockResolvedValue({ category: '국내 산업', note: null, bullets: [] });
+    analyzeDeep.mockResolvedValue({ category: '국내 산업', headline: 'h', note: null, bullets: [], background: null, isReference: false });
     let call = 0;
     vi.spyOn(Date, 'now').mockImplementation(() => {
       call++;
