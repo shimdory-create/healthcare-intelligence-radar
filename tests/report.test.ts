@@ -34,7 +34,7 @@ describe('buildReportSections', () => {
       ],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections).toEqual([
       {
@@ -52,23 +52,39 @@ describe('buildReportSections', () => {
     ]);
   });
 
-  it('uses the deep-analysis headline instead of the source article title when available', () => {
+  it('uses the deep-analysis headline instead of the source article title', () => {
     const candidates = [makeCandidate({ id: 1, title: '원본 뉴스 제목' })];
     const deep = new Map<number, CandidateDeepResult>([
       [1, { articleId: 1, category: '국내 산업', headline: '압축된 보고서용 헤드라인', note: null, bullets: [], background: null, isReference: false }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections[0].items[0].headline).toBe('압축된 보고서용 헤드라인');
   });
 
-  it('falls back to the raw article title when there is no deep-analysis headline', () => {
-    const candidates = [makeCandidate({ id: 1, title: '원본 뉴스 제목' })];
+  it('excludes a candidate entirely when deep analysis never reached it (time budget)', () => {
+    const candidates = [
+      makeCandidate({ id: 1, title: '딥분석 됨' }),
+      makeCandidate({ id: 2, title: '딥분석 못 받음' }),
+    ];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: '딥분석 됨', note: null, bullets: [], background: null, isReference: false }],
+    ]);
 
-    const sections = buildReportSections(candidates, new Map(), new Map([[1, '요약']]));
+    const sections = buildReportSections(candidates, deep);
 
-    expect(sections[0].items[0].headline).toBe('원본 뉴스 제목');
+    expect(sections).toHaveLength(1);
+    expect(sections[0].items).toHaveLength(1);
+    expect(sections[0].items[0].headline).toBe('딥분석 됨');
+  });
+
+  it('produces no sections at all when nothing has deep analysis', () => {
+    const candidates = [makeCandidate({ id: 1, title: '딥분석 못 받음' })];
+
+    const sections = buildReportSections(candidates, new Map());
+
+    expect(sections).toEqual([]);
   });
 
   it('carries the background field through when Gemini provides one', () => {
@@ -77,7 +93,7 @@ describe('buildReportSections', () => {
       [1, { articleId: 1, category: '국내 산업', headline: 'h', note: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections[0].items[0].background).toBe('Qubit은 디지털자산 전문 MGA');
   });
@@ -88,9 +104,28 @@ describe('buildReportSections', () => {
       [1, { articleId: 1, category: '국내 산업', headline: 'h', note: null, bullets: [], background: null, isReference: true }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections[0].items[0].isReference).toBe(true);
+  });
+
+  it('groups isReference items after core items within a section, without reordering within each group', () => {
+    const candidates = [
+      makeCandidate({ id: 1, title: '참고1' }),
+      makeCandidate({ id: 2, title: '핵심1' }),
+      makeCandidate({ id: 3, title: '참고2' }),
+      makeCandidate({ id: 4, title: '핵심2' }),
+    ];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: '참고1', note: null, bullets: [], background: null, isReference: true }],
+      [2, { articleId: 2, category: '국내 산업', headline: '핵심1', note: null, bullets: [], background: null, isReference: false }],
+      [3, { articleId: 3, category: '국내 산업', headline: '참고2', note: null, bullets: [], background: null, isReference: true }],
+      [4, { articleId: 4, category: '국내 산업', headline: '핵심2', note: null, bullets: [], background: null, isReference: false }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items.map((i) => i.headline)).toEqual(['핵심1', '핵심2', '참고1', '참고2']);
   });
 
   it('routes a multi-outlet, non-high candidate into 다수매체 보도 regardless of its category', () => {
@@ -99,7 +134,7 @@ describe('buildReportSections', () => {
       [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', note: null, bullets: [], background: null, isReference: false }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections).toEqual([
       {
@@ -115,53 +150,9 @@ describe('buildReportSections', () => {
       [3, { articleId: 3, category: 'Global', headline: 'h', note: '용어 설명', bullets: [], background: null, isReference: false }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections[0].items[0].note).toBe('국내 3개 매체 보도 — 용어 설명');
-  });
-
-  it('falls back to the existing short summary as a single bullet when deep analysis is missing', () => {
-    const candidates = [makeCandidate({ id: 4, title: '높음인데 딥분석 실패' })];
-
-    const sections = buildReportSections(candidates, new Map(), new Map([[4, '기존 짧은 요약문']]));
-
-    expect(sections).toEqual([
-      {
-        title: '국내 산업',
-        items: [
-          {
-            headline: '높음인데 딥분석 실패',
-            note: null,
-            bullets: [{ text: '기존 짧은 요약문', subBullets: [] }],
-            background: null,
-            isReference: false,
-          },
-        ],
-      },
-    ]);
-  });
-
-  it('falls back to a "no summary available" bullet -- never the article title -- when there is neither a deep result nor an existing summary', () => {
-    const candidates = [makeCandidate({ id: 5, title: '딥분석도 기존요약도 없음' })];
-
-    const sections = buildReportSections(candidates, new Map(), new Map());
-
-    expect(sections).toEqual([
-      {
-        title: '국내 산업',
-        items: [
-          {
-            headline: '딥분석도 기존요약도 없음',
-            note: null,
-            bullets: [{ text: '요약 정보 없음', subBullets: [] }],
-            background: null,
-            isReference: false,
-          },
-        ],
-      },
-    ]);
-    // guard against the exact regression this covers: headline and bullet must never be identical
-    expect(sections[0].items[0].bullets[0].text).not.toBe(sections[0].items[0].headline);
   });
 
   it('keeps the fixed section order and omits empty sections', () => {
@@ -174,7 +165,7 @@ describe('buildReportSections', () => {
       [2, { articleId: 2, category: '국내 산업', headline: 'h2', note: null, bullets: [], background: null, isReference: false }],
     ]);
 
-    const sections = buildReportSections(candidates, deep, new Map());
+    const sections = buildReportSections(candidates, deep);
 
     expect(sections.map((s) => s.title)).toEqual(['Global', '다수매체 보도']);
   });

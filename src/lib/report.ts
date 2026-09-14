@@ -28,11 +28,6 @@ export interface ReportSection {
 type SectionName = '국내 보험·제도' | '국내 산업' | 'Global' | '다수매체 보도';
 const SECTION_ORDER: SectionName[] = ['국내 보험·제도', '국내 산업', 'Global', '다수매체 보도'];
 
-/** items with no deep analysis (fetch/extraction/Gemini all failed for it, or the
- *  deadline was reached first) fall back to this default category -- an honest,
- *  simple catch-all rather than guessing from tags. */
-const FALLBACK_CATEGORY: SectionName = '국내 산업';
-
 function escapeHtml(text: string): string {
   const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return text.replace(/[&<>"']/g, (c) => map[c]);
@@ -82,47 +77,39 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
 export function buildReportSections(
   candidates: ReportCandidate[],
   deepResults: Map<number, CandidateDeepResult>,
-  fallbackSummaries: Map<number, string>,
 ): ReportSection[] {
   const byName = new Map<SectionName, ReportItem[]>(SECTION_ORDER.map((name) => [name, []]));
 
   for (const candidate of candidates) {
     const deep = deepResults.get(candidate.id);
+    // an item with no deep analysis (time budget exhausted before reaching it) has no
+    // report-quality content available for it -- rather than show a jarringly different-toned
+    // fallback (the plain digest summary, written for a different context entirely), drop it
+    // from the report; it's still visible in the regular digest below.
+    if (!deep) continue;
 
-    let note = deep?.note ?? null;
-    // When deep analysis is missing, fall back to the article's existing short summary
-    // (already in ai_analysis) as a single bullet. If even that doesn't exist -- no
-    // ai_analysis row at all, which now happens routinely for rule-based-low articles
-    // (skipped from AI enrichment entirely) and for rule-based-high articles past an
-    // early-stopped enrichment cutoff -- don't echo the headline back as its own bullet;
-    // say plainly that no summary is available.
-    const fallbackSummary = fallbackSummaries.get(candidate.id);
-    const bullets: ReportBullet[] = deep
-      ? deep.bullets
-      : [{ text: fallbackSummary ?? '요약 정보 없음', subBullets: [] }];
-
-    const sectionName: SectionName = candidate.isMultiOutlet
-      ? '다수매체 보도'
-      : (deep?.category ?? FALLBACK_CATEGORY);
-
+    let note = deep.note;
     if (candidate.isMultiOutlet) {
       const outletNote = `국내 ${candidate.outletCount}개 매체 보도`;
       note = note ? `${outletNote} — ${note}` : outletNote;
     }
 
-    // the deep-analysis headline replaces the source article's own (news-style) title -- see
-    // buildDeepPrompt's headline rules; a fallback item has no rewritten headline available,
-    // so it keeps the raw article title
-    const headline = deep?.headline ?? candidate.title;
+    const sectionName: SectionName = candidate.isMultiOutlet ? '다수매체 보도' : deep.category;
 
-    byName
-      .get(sectionName)!
-      .push({ headline, note, bullets, background: deep?.background ?? null, isReference: deep?.isReference ?? false });
+    byName.get(sectionName)!.push({
+      headline: deep.headline,
+      note,
+      bullets: deep.bullets,
+      background: deep.background,
+      isReference: deep.isReference,
+    });
   }
 
-  return SECTION_ORDER.map((title) => ({ title, items: byName.get(title)! })).filter(
-    (section) => section.items.length > 0,
-  );
+  return SECTION_ORDER.map((title) => ({
+    title,
+    // core (non-reference) items first; supplementary/FYI ("(참고)") items grouped at the end
+    items: [...byName.get(title)!].sort((a, b) => Number(a.isReference) - Number(b.isReference)),
+  })).filter((section) => section.items.length > 0);
 }
 
 const FONT = '바탕체';

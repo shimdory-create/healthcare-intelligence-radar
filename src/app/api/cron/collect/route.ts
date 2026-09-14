@@ -148,11 +148,7 @@ export async function GET(req: NextRequest) {
           // the margin reserved for loadBatch/email/kakao below.
           report = 'skipped: time budget exhausted before render';
         } else {
-          const missingIds = candidates.filter((c) => !deepResults.has(c.id)).map((c) => c.id);
-          const fallbackAnalyses = await getAiAnalysesForArticles(missingIds);
-          const fallbackSummaries = new Map(fallbackAnalyses.map((a) => [a.articleId, a.summary]));
-
-          const sections = buildReportSections(candidates, deepResults, fallbackSummaries);
+          const sections = buildReportSections(candidates, deepResults);
           reportDocxBuffer = await buildReportDocx(sections, formatKstDate(collectedDate), '헬스케어사업팀');
           reportHtml = buildReportEmailHtml(sections, formatKstDate(collectedDate));
           report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
