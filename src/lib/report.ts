@@ -105,7 +105,7 @@ function sectionHeadingPara(text: string): Paragraph {
 function headlinePara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '□ ', bold: true, size: BODY_SIZE, font: FONT }),
+      new TextRun({ text: '□ ', size: BODY_SIZE, font: FONT }),
       new TextRun({ text, bold: true, underline: {}, size: BODY_SIZE, font: FONT }),
     ],
     spacing: { before: 200, after: 40, ...LINE_SPACING },
