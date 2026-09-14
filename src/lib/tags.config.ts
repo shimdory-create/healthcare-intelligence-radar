@@ -11,7 +11,7 @@ export interface TagDefinition {
 }
 
 export const TAGS: TagDefinition[] = [
-  { tag: '암', keywords: ['암'], excludeKeywords: ['암호'] },
+  { tag: '암', keywords: ['암'], excludeKeywords: ['암호', '암울', '암매장', '영암'] },
   { tag: '심뇌혈관', keywords: ['심뇌혈관', '심혈관', '뇌혈관', '심근경색', '뇌졸중'] },
   { tag: '중증질환', keywords: ['중증질환'] },
   { tag: '비만', keywords: ['비만'] },

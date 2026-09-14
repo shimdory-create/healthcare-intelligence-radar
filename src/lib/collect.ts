@@ -46,7 +46,13 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
       }
 
       const { tags, score } = matchTags(`${a.title} ${a.snippet}`);
-      if (source.tier !== 1 && tags.length === 0) {
+      // tier 1 (government) is always kept regardless of tag match. Tier 3 (healthcare
+      // specialty press) is inherently on-topic, so any tag match -- weak included -- is
+      // enough. Tier 2 (general economy press) covers everything, so a weak-only match
+      // (e.g. "보험"/"플랫폼" mentioned in an unrelated finance/tech story) isn't a strong
+      // enough signal -- it needs at least one specific/strong tag (score > 0).
+      const noTagMatch = source.tier === 3 ? tags.length === 0 : source.tier === 2 ? score === 0 : false;
+      if (noTagMatch) {
         summary.skippedNoTagMatch++;
         continue;
       }

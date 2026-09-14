@@ -65,6 +65,11 @@ describe('matchTags', () => {
     expect(result.score).toBe(0);
   });
 
+  it('excludeKeywords covers other discovered false-positive substrings for the 암 tag', () => {
+    const result = matchTags('"암울한 근황" 파주 암매장 살인, 영암축전 개최');
+    expect(result.tags).not.toContain('암');
+  });
+
   it('a weak tag alongside a strong match counts normally toward the score', () => {
     const mixedTags: TagDefinition[] = [
       { tag: '보험', keywords: ['보험'], weak: true },
