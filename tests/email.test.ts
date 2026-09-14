@@ -117,4 +117,28 @@ describe('buildDigestHtml', () => {
     expect(html).toContain('&amp;');
     expect(html).toContain('&quot;따옴표&quot;');
   });
+
+  it('embeds the report image at the top of the body and attaches the docx when both are provided', () => {
+    const article = makeArticle({ id: 1 });
+    const reportImageBuffer = Buffer.from('fake-png-bytes');
+    const reportDocxBuffer = Buffer.from('fake-docx-bytes');
+
+    const html = buildDigestHtml(
+      [article],
+      COUNTS,
+      '9월 3일 (목)',
+      'https://healthcare-radar.vercel.app',
+      new Map(),
+      new Map(),
+      reportImageBuffer,
+    );
+
+    expect(html.indexOf('cid:report-preview')).toBeLessThan(html.indexOf(article.title));
+  });
+
+  it('omits the report image markup entirely when no report was generated that day', () => {
+    const article = makeArticle({ id: 1 });
+    const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
+    expect(html).not.toContain('cid:report-preview');
+  });
 });
