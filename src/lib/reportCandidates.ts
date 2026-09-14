@@ -8,6 +8,7 @@ export interface ReportCandidate {
   tags: string[];
   priority: PriorityBand;
   outletCount: number;
+  outletSourceIds: string[];
   isMultiOutlet: boolean;
 }
 

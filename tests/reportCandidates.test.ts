@@ -11,20 +11,45 @@ describe('getCandidatesForReport', () => {
   it('marks a high-priority candidate as not multi-outlet even if it is also heavily duplicated', async () => {
     const { getCandidatesForReport } = await import('@/lib/reportCandidates');
     getReportCandidates.mockResolvedValue([
-      { id: 1, title: 'T', url: 'https://e.com/1', tags: ['GLP-1'], priority: 'high', outletCount: 5 },
+      {
+        id: 1,
+        title: 'T',
+        url: 'https://e.com/1',
+        tags: ['GLP-1'],
+        priority: 'high',
+        outletCount: 5,
+        outletSourceIds: ['yna', 'chosun', 'donga', 'joongang', 'mk'],
+      },
     ]);
 
     const result = await getCandidatesForReport(['2026-09-14']);
 
     expect(result).toEqual([
-      { id: 1, title: 'T', url: 'https://e.com/1', tags: ['GLP-1'], priority: 'high', outletCount: 5, isMultiOutlet: false },
+      {
+        id: 1,
+        title: 'T',
+        url: 'https://e.com/1',
+        tags: ['GLP-1'],
+        priority: 'high',
+        outletCount: 5,
+        outletSourceIds: ['yna', 'chosun', 'donga', 'joongang', 'mk'],
+        isMultiOutlet: false,
+      },
     ]);
   });
 
   it('marks a non-high candidate that only qualified via outlet count as multi-outlet', async () => {
     const { getCandidatesForReport } = await import('@/lib/reportCandidates');
     getReportCandidates.mockResolvedValue([
-      { id: 2, title: 'U', url: 'https://e.com/2', tags: ['암'], priority: 'medium', outletCount: 3 },
+      {
+        id: 2,
+        title: 'U',
+        url: 'https://e.com/2',
+        tags: ['암'],
+        priority: 'medium',
+        outletCount: 3,
+        outletSourceIds: ['yna', 'chosun', 'donga'],
+      },
     ]);
 
     const result = await getCandidatesForReport(['2026-09-14']);

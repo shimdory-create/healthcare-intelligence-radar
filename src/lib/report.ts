@@ -1,6 +1,7 @@
 import { Document, Packer, Paragraph, TextRun, AlignmentType, LineRuleType } from 'docx';
 import type { ReportCandidate } from './reportCandidates';
 import type { CandidateDeepResult } from './reportAnalysis';
+import { sourceDisplayName } from './sourceLookup';
 
 export interface ReportBullet {
   text: string;
@@ -50,7 +51,7 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
           const bulletsHtml = item.bullets
             .map((b) => {
               const subHtml = b.subBullets
-                .map((s) => `<p style="margin:2px 0 0 40px;font-size:12px;">· ${escapeHtml(s)}</p>`)
+                .map((s) => `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s)}</p>`)
                 .join('');
               return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${subHtml}`;
             })
@@ -90,7 +91,8 @@ export function buildReportSections(
 
     let note = deep.note;
     if (candidate.isMultiOutlet) {
-      const outletNote = `국내 ${candidate.outletCount}개 매체 보도`;
+      const outletNames = candidate.outletSourceIds.map(sourceDisplayName).join(', ');
+      const outletNote = `${candidate.outletCount}개 매체 보도 (${outletNames})`;
       note = note ? `${outletNote} — ${note}` : outletNote;
     }
 
@@ -118,6 +120,12 @@ const FONT = '바탕체';
 // spacing, so 1.2x is 240*1.2 = 288. Spread into every paragraph's `spacing` alongside its
 // own before/after values.
 const LINE_SPACING = { line: 288, lineRule: LineRuleType.AUTO };
+
+// The "* " glossary note is always a single short line, so the document-wide 1.2x line height
+// only adds dead space above and below it without helping readability (1.2x only matters once
+// a paragraph wraps to multiple lines) -- single (1x) spacing lets it sit close to the
+// headline above and the bullets below instead of floating in extra whitespace.
+const SINGLE_LINE_SPACING = { line: 240, lineRule: LineRuleType.AUTO };
 
 // Title is 22pt; everything else in the body (dates, headings, headlines, bullets, closing)
 // is a uniform 14pt except the "* " glossary notes, which are 10pt -- docx sizes are in
@@ -162,8 +170,8 @@ function headlinePara(text: string): Paragraph {
 
 function notePara(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: `* ${text}`, italics: true, size: NOTE_SIZE, font: FONT, color: '555555' })],
-    spacing: { after: 60, ...LINE_SPACING },
+    children: [new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555' })],
+    spacing: { after: 60, ...SINGLE_LINE_SPACING },
     indent: { left: 800, hanging: 180 },
   });
 }
@@ -190,7 +198,9 @@ function bulletPara(text: string): Paragraph {
 function subBulletPara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '· ', size: BODY_SIZE, font: FONT }),
+      // no trailing space after "·" -- the glyph's own right-side bearing already reads as a
+      // gap, so an explicit space on top of it left a visibly wider gap than "□ "/"- " get
+      new TextRun({ text: '·', size: BODY_SIZE, font: FONT }),
       new TextRun({ text, size: BODY_SIZE, font: FONT }),
     ],
     spacing: { after: 40, ...LINE_SPACING },

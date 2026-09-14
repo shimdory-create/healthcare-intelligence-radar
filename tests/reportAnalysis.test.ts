@@ -15,6 +15,7 @@ function makeCandidate(overrides: Partial<ReportCandidate>): ReportCandidate {
     tags: [],
     priority: 'high',
     outletCount: 1,
+    outletSourceIds: ['yna'],
     isMultiOutlet: false,
     ...overrides,
   };

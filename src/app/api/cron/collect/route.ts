@@ -9,7 +9,7 @@ import {
   type ArticleRow,
   type PriorityCounts,
 } from '@/lib/db';
-import { formatKstDate } from '@/lib/dateFormat';
+import { formatKstDate, formatReportDate } from '@/lib/dateFormat';
 import { sendDigestEmail, resolveDashboardUrl } from '@/lib/email';
 import { sendKakaoMemo } from '@/lib/kakao';
 import { enrichArticles } from '@/lib/aiEnrichment';
@@ -150,8 +150,8 @@ export async function GET(req: NextRequest) {
           report = 'skipped: time budget exhausted before render';
         } else {
           const sections = buildReportSections(candidates, deepResults);
-          reportDocxBuffer = await buildReportDocx(sections, formatKstDate(collectedDate), '헬스케어사업팀');
-          reportHtml = buildReportEmailHtml(sections, formatKstDate(collectedDate));
+          reportDocxBuffer = await buildReportDocx(sections, formatReportDate(collectedDate), '헬스케어사업팀');
+          reportHtml = buildReportEmailHtml(sections, formatReportDate(collectedDate));
           report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
         }
       } catch (err) {

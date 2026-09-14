@@ -204,6 +204,10 @@ export interface CandidateRow {
   tags: string[];
   priority: PriorityBand;
   outletCount: number;
+  /** source ids of every outlet covering the story (the survivor itself plus every article
+   *  grouped as its duplicate) -- lets the report name the outlets instead of just counting
+   *  them. Length always matches outletCount. */
+  outletSourceIds: string[];
 }
 
 /** candidates for the deep-analysis report pass: every 'high' survivor, plus every
@@ -213,7 +217,14 @@ export interface CandidateRow {
 export async function getReportCandidates(collectedDates: string[]): Promise<CandidateRow[]> {
   const rows = await sql`
     select a.id, a.title, a.url, a.tags, a.priority,
-      (1 + (select count(*) from articles b where b.duplicate_of_id = a.id))::int as outlet_count
+      (1 + (select count(*) from articles b where b.duplicate_of_id = a.id))::int as outlet_count,
+      (
+        select array_agg(x.source_id) from (
+          select a.source_id
+          union all
+          select b.source_id from articles b where b.duplicate_of_id = a.id
+        ) x
+      ) as outlet_source_ids
     from articles a
     where (a.collected_at at time zone 'Asia/Seoul')::date = any(${collectedDates}::date[])
       and a.duplicate_of_id is null
@@ -230,6 +241,7 @@ export async function getReportCandidates(collectedDates: string[]): Promise<Can
     tags: r.tags,
     priority: r.priority,
     outletCount: r.outlet_count,
+    outletSourceIds: r.outlet_source_ids,
   }));
 }
 

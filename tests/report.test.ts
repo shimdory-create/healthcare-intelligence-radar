@@ -11,6 +11,7 @@ function makeCandidate(overrides: Partial<ReportCandidate>): ReportCandidate {
     tags: [],
     priority: 'high',
     outletCount: 1,
+    outletSourceIds: ['yna'],
     isMultiOutlet: false,
     ...overrides,
   };
@@ -129,7 +130,16 @@ describe('buildReportSections', () => {
   });
 
   it('routes a multi-outlet, non-high candidate into 다수매체 보도 regardless of its category', () => {
-    const candidates = [makeCandidate({ id: 2, title: 'GC녹십자 mRNA', priority: 'medium', outletCount: 4, isMultiOutlet: true })];
+    const candidates = [
+      makeCandidate({
+        id: 2,
+        title: 'GC녹십자 mRNA',
+        priority: 'medium',
+        outletCount: 4,
+        outletSourceIds: ['yna', 'chosun', 'donga', 'joongang'],
+        isMultiOutlet: true,
+      }),
+    ];
     const deep = new Map<number, CandidateDeepResult>([
       [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', note: null, bullets: [], background: null, isReference: false }],
     ]);
@@ -139,20 +149,36 @@ describe('buildReportSections', () => {
     expect(sections).toEqual([
       {
         title: '다수매체 보도',
-        items: [{ headline: 'GC녹십자 mRNA', note: '국내 4개 매체 보도', bullets: [], background: null, isReference: false }],
+        items: [
+          {
+            headline: 'GC녹십자 mRNA',
+            note: '4개 매체 보도 (연합뉴스, 조선일보, 동아일보, 중앙일보)',
+            bullets: [],
+            background: null,
+            isReference: false,
+          },
+        ],
       },
     ]);
   });
 
-  it('prefixes the outlet-count note onto an existing glossary note for multi-outlet items', () => {
-    const candidates = [makeCandidate({ id: 3, priority: 'low', outletCount: 3, isMultiOutlet: true })];
+  it('prefixes the outlet-count-and-names note onto an existing glossary note for multi-outlet items', () => {
+    const candidates = [
+      makeCandidate({
+        id: 3,
+        priority: 'low',
+        outletCount: 3,
+        outletSourceIds: ['yna', 'chosun', 'donga'],
+        isMultiOutlet: true,
+      }),
+    ];
     const deep = new Map<number, CandidateDeepResult>([
       [3, { articleId: 3, category: 'Global', headline: 'h', note: '용어 설명', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
 
-    expect(sections[0].items[0].note).toBe('국내 3개 매체 보도 — 용어 설명');
+    expect(sections[0].items[0].note).toBe('3개 매체 보도 (연합뉴스, 조선일보, 동아일보) — 용어 설명');
   });
 
   it('keeps the fixed section order and omits empty sections', () => {
