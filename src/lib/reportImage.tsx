@@ -16,7 +16,7 @@ export async function buildReportImage(sections: ReportSection[]): Promise<Buffe
             </div>
             {section.items.map((item) => (
               <div key={item.headline} style={{ display: 'flex', flexDirection: 'column', marginBottom: 10, paddingLeft: 12 }}>
-                <div style={{ display: 'flex', fontSize: 15, fontWeight: 700 }}>□ {item.headline}</div>
+                <div style={{ display: 'flex', fontSize: 15, fontWeight: 700 }}>• {item.headline}</div>
                 {item.bullets.slice(0, 2).map((bullet, bi) => (
                   <div key={bi} style={{ display: 'flex', fontSize: 13, color: '#333333', paddingLeft: 16 }}>
                     - {bullet.text}
