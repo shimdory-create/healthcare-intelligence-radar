@@ -5,8 +5,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mockFetchHtml(html: string, ok = true) {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok, status: ok ? 200 : 500, text: async () => html }));
+function mockFetchHtml(html: string, ok = true, contentLength?: string) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok,
+      status: ok ? 200 : 500,
+      text: async () => html,
+      headers: { get: (name: string) => (name.toLowerCase() === 'content-length' ? (contentLength ?? null) : null) },
+    }),
+  );
 }
 
 describe('extractArticleText', () => {
@@ -45,6 +53,21 @@ describe('extractArticleText', () => {
   it('returns null instead of throwing when fetch itself rejects', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const text = await extractArticleText('https://example.com/timeout');
+    expect(text).toBeNull();
+  });
+
+  it('sends a browser-like User-Agent header so outlets do not 403 a bare Node fetch', async () => {
+    mockFetchHtml('<html><body><article><p>본문</p></article></body></html>');
+    await extractArticleText('https://example.com/article');
+
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers['User-Agent']).toMatch(/Mozilla/);
+  });
+
+  it('returns null without fetching the body when Content-Length exceeds the size guard', async () => {
+    mockFetchHtml('<html><body><article><p>본문</p></article></body></html>', true, String(10 * 1024 * 1024));
+    const text = await extractArticleText('https://example.com/huge');
     expect(text).toBeNull();
   });
 });

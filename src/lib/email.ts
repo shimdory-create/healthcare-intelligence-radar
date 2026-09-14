@@ -86,6 +86,16 @@ export function buildDigestHtml(
     </div>`;
 }
 
+/** Fallback for the docx attachment filename when no ISO collectedDate is available --
+ *  strips characters that are awkward in a MIME filename header (spaces, parens, Korean
+ *  particles) from a human dateLabel like "9월 15일 (월)", leaving a filename-safe slug. */
+function sanitizeForFilename(dateLabel: string): string {
+  return dateLabel
+    .replace(/[()]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
 export function resolveDashboardUrl(): string {
   if (process.env.EMAIL_DASHBOARD_URL) return process.env.EMAIL_DASHBOARD_URL;
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
@@ -101,6 +111,11 @@ export async function sendDigestEmail(
   duplicatesById: Map<number, DuplicateRef[]> = new Map(),
   reportImageBuffer?: Buffer,
   reportDocxBuffer?: Buffer,
+  // Plain ISO 'YYYY-MM-DD' (e.g. '2026-09-15'), used for the docx attachment filename in
+  // place of the human dateLabel (e.g. "9월 15일 (월)") -- spaces/parens/Korean characters
+  // are awkward in a MIME filename header. Optional so existing callers/tests are unaffected;
+  // falls back to a sanitized dateLabel when not supplied.
+  collectedDate?: string,
 ): Promise<void> {
   if (articles.length === 0) return;
 
@@ -131,8 +146,9 @@ export async function sendDigestEmail(
     });
   }
   if (reportDocxBuffer) {
+    const filenameDate = collectedDate ?? sanitizeForFilename(dateLabel);
     attachments.push({
-      filename: `healthcare-market-intelligence-${dateLabel}.docx`,
+      filename: `healthcare-market-intelligence-${filenameDate}.docx`,
       content: reportDocxBuffer.toString('base64'),
     });
   }

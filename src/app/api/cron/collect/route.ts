@@ -5,7 +5,6 @@ import {
   getPriorityCounts,
   getLatestCollectionDate,
   getAiAnalysesForArticles,
-  getAiAnalysesForArticles as getAiSummariesForFallback,
   getDuplicatesOf,
   type ArticleRow,
   type PriorityCounts,
@@ -75,6 +74,7 @@ async function sendEmailDigest(
     duplicatesById,
     reportImageBuffer,
     reportDocxBuffer,
+    batch.collectedDate,
   );
   return 'sent';
 }
@@ -129,22 +129,27 @@ export async function GET(req: NextRequest) {
     let reportImageBuffer: Buffer | undefined;
     let reportDocxBuffer: Buffer | undefined;
     const reportDates = reportDateRange(collectedDate);
+    const reportDeadline = routeStart + maxDuration * 1000 - REPORT_RESERVE_MS;
     if (!reportDates) {
       report = 'no-report-today';
+    } else if (Date.now() >= reportDeadline) {
+      // Time budget is already exhausted (e.g. AI enrichment ran long) -- skip the whole
+      // report phase, including the initial candidate fetch, rather than spend a DB
+      // round-trip on a phase that has no time left to produce anything.
+      report = 'skipped: time budget exhausted before render';
     } else {
       try {
         const candidates = await getCandidatesForReport(reportDates);
-        const reportDeadline = routeStart + maxDuration * 1000 - REPORT_RESERVE_MS;
         const deepResults = await analyzeCandidatesDeep(candidates, reportDeadline);
 
         if (Date.now() >= reportDeadline) {
-          // Time budget is already exhausted (e.g. AI enrichment ran long and analyzeCandidatesDeep
-          // returned early/empty) -- skip building the docx/image entirely rather than let their
-          // unbounded latency eat into the margin reserved for loadBatch/email/kakao below.
+          // Time budget ran out during analyzeCandidatesDeep (it returned early/empty) --
+          // skip building the docx/image entirely rather than let their unbounded latency
+          // eat into the margin reserved for loadBatch/email/kakao below.
           report = 'skipped: time budget exhausted before render';
         } else {
           const missingIds = candidates.filter((c) => !deepResults.has(c.id)).map((c) => c.id);
-          const fallbackAnalyses = await getAiSummariesForFallback(missingIds);
+          const fallbackAnalyses = await getAiAnalysesForArticles(missingIds);
           const fallbackSummaries = new Map(fallbackAnalyses.map((a) => [a.articleId, a.summary]));
 
           const sections = buildReportSections(candidates, deepResults, fallbackSummaries);

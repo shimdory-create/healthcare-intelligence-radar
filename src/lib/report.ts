@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, AlignmentType } from 'docx';
 import type { ReportCandidate } from './reportCandidates';
 import type { CandidateDeepResult } from './reportAnalysis';
 
@@ -37,9 +37,16 @@ export function buildReportSections(
     const deep = deepResults.get(candidate.id);
 
     let note = deep?.note ?? null;
+    // When deep analysis is missing, fall back to the article's existing short summary
+    // (already in ai_analysis) as a single bullet. If even that doesn't exist -- no
+    // ai_analysis row at all, which now happens routinely for rule-based-low articles
+    // (skipped from AI enrichment entirely) and for rule-based-high articles past an
+    // early-stopped enrichment cutoff -- don't echo the headline back as its own bullet;
+    // say plainly that no summary is available.
+    const fallbackSummary = fallbackSummaries.get(candidate.id);
     const bullets: ReportBullet[] = deep
       ? deep.bullets
-      : [{ text: fallbackSummaries.get(candidate.id) ?? candidate.title, subBullets: [] }];
+      : [{ text: fallbackSummary ?? '요약 정보 없음', subBullets: [] }];
 
     const sectionName: SectionName = candidate.isMultiOutlet
       ? '다수매체 보도'

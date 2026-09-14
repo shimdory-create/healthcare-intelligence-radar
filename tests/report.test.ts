@@ -64,6 +64,18 @@ describe('buildReportSections', () => {
     ]);
   });
 
+  it('falls back to a "no summary available" bullet -- never the article title -- when there is neither a deep result nor an existing summary', () => {
+    const candidates = [makeCandidate({ id: 5, title: '딥분석도 기존요약도 없음' })];
+
+    const sections = buildReportSections(candidates, new Map(), new Map());
+
+    expect(sections).toEqual([
+      { title: '국내 산업', items: [{ headline: '딥분석도 기존요약도 없음', note: null, bullets: [{ text: '요약 정보 없음', subBullets: [] }] }] },
+    ]);
+    // guard against the exact regression this covers: headline and bullet must never be identical
+    expect(sections[0].items[0].bullets[0].text).not.toBe(sections[0].items[0].headline);
+  });
+
   it('keeps the fixed section order and omits empty sections', () => {
     const candidates = [
       makeCandidate({ id: 1, priority: 'high' }),
