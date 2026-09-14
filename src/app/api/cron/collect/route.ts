@@ -148,14 +148,21 @@ export async function GET(req: NextRequest) {
         const reportDeadline = routeStart + maxDuration * 1000 - REPORT_RESERVE_MS;
         const deepResults = await analyzeCandidatesDeep(candidates, reportDeadline);
 
-        const missingIds = candidates.filter((c) => !deepResults.has(c.id)).map((c) => c.id);
-        const fallbackAnalyses = await getAiSummariesForFallback(missingIds);
-        const fallbackSummaries = new Map(fallbackAnalyses.map((a) => [a.articleId, a.summary]));
+        if (Date.now() >= reportDeadline) {
+          // Time budget is already exhausted (e.g. AI enrichment ran long and analyzeCandidatesDeep
+          // returned early/empty) -- skip building the docx/image entirely rather than let their
+          // unbounded latency eat into the margin reserved for loadBatch/email/kakao below.
+          report = 'skipped: time budget exhausted before render';
+        } else {
+          const missingIds = candidates.filter((c) => !deepResults.has(c.id)).map((c) => c.id);
+          const fallbackAnalyses = await getAiSummariesForFallback(missingIds);
+          const fallbackSummaries = new Map(fallbackAnalyses.map((a) => [a.articleId, a.summary]));
 
-        const sections = buildReportSections(candidates, deepResults, fallbackSummaries);
-        reportDocxBuffer = await buildReportDocx(sections, formatKstDate(collectedDate), '헬스케어사업팀');
-        reportImageBuffer = await buildReportImage(sections);
-        report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
+          const sections = buildReportSections(candidates, deepResults, fallbackSummaries);
+          reportDocxBuffer = await buildReportDocx(sections, formatKstDate(collectedDate), '헬스케어사업팀');
+          reportImageBuffer = await buildReportImage(sections);
+          report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
+        }
       } catch (err) {
         report = `error: ${err instanceof Error ? err.message : String(err)}`;
       }
