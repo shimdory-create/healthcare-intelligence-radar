@@ -16,8 +16,7 @@ import { enrichArticles } from '@/lib/aiEnrichment';
 import { demoteDuplicatePriorities } from '@/lib/duplicates';
 import { getCandidatesForReport } from '@/lib/reportCandidates';
 import { analyzeCandidatesDeep } from '@/lib/reportAnalysis';
-import { buildReportSections, buildReportDocx } from '@/lib/report';
-import { buildReportImage } from '@/lib/reportImage';
+import { buildReportSections, buildReportDocx, buildReportEmailHtml } from '@/lib/report';
 import { reportDateRange } from '@/lib/reportSchedule';
 
 export const maxDuration = 300;
@@ -59,7 +58,7 @@ async function loadBatch(collectedDate: string): Promise<LatestBatch> {
 
 async function sendEmailDigest(
   batch: LatestBatch,
-  reportImageBuffer?: Buffer,
+  reportHtml?: string,
   reportDocxBuffer?: Buffer,
 ): Promise<string> {
   if (batch.articles.length === 0) return 'no-articles';
@@ -72,7 +71,7 @@ async function sendEmailDigest(
     formatKstDate(batch.collectedDate),
     analysesById,
     duplicatesById,
-    reportImageBuffer,
+    reportHtml,
     reportDocxBuffer,
     batch.collectedDate,
   );
@@ -123,10 +122,11 @@ export async function GET(req: NextRequest) {
       .then((r) => `demoted ${r.demoted} across ${r.groups} groups`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
-    // deep-analysis report phase (fetch + extract + Gemini per candidate, then docx + preview
-    // image) -- isolated by its own catch, same as ai/dedupe above, so a failure here (or
-    // running out of its reserved time budget) never blocks the daily email/kakao send.
-    let reportImageBuffer: Buffer | undefined;
+    // deep-analysis report phase (fetch + extract + Gemini per candidate, then docx + a plain
+    // HTML rendering for the email body) -- isolated by its own catch, same as ai/dedupe above,
+    // so a failure here (or running out of its reserved time budget) never blocks the daily
+    // email/kakao send.
+    let reportHtml: string | undefined;
     let reportDocxBuffer: Buffer | undefined;
     const reportDates = reportDateRange(collectedDate);
     const reportDeadline = routeStart + maxDuration * 1000 - REPORT_RESERVE_MS;
@@ -144,8 +144,8 @@ export async function GET(req: NextRequest) {
 
         if (Date.now() >= reportDeadline) {
           // Time budget ran out during analyzeCandidatesDeep (it returned early/empty) --
-          // skip building the docx/image entirely rather than let their unbounded latency
-          // eat into the margin reserved for loadBatch/email/kakao below.
+          // skip building the docx entirely rather than let its unbounded latency eat into
+          // the margin reserved for loadBatch/email/kakao below.
           report = 'skipped: time budget exhausted before render';
         } else {
           const missingIds = candidates.filter((c) => !deepResults.has(c.id)).map((c) => c.id);
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
 
           const sections = buildReportSections(candidates, deepResults, fallbackSummaries);
           reportDocxBuffer = await buildReportDocx(sections, formatKstDate(collectedDate), '헬스케어사업팀');
-          reportImageBuffer = await buildReportImage(sections);
+          reportHtml = buildReportEmailHtml(sections, formatKstDate(collectedDate));
           report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
         }
       } catch (err) {
@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
     // rather than an earlier snapshot
     const batch = await loadBatch(collectedDate);
 
-    email = await sendEmailDigest(batch, reportImageBuffer, reportDocxBuffer).catch(
+    email = await sendEmailDigest(batch, reportHtml, reportDocxBuffer).catch(
       (err) => `error: ${err instanceof Error ? err.message : String(err)}`,
     );
     kakao = await sendKakaoDigest(batch).catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);

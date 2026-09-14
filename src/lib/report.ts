@@ -26,6 +26,48 @@ const SECTION_ORDER: SectionName[] = ['국내 보험·제도', '국내 산업', 
  *  simple catch-all rather than guessing from tags. */
 const FALLBACK_CATEGORY: SectionName = '국내 산업';
 
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, (c) => map[c]);
+}
+
+/** Renders the report as plain HTML text for the email body -- mirrors buildReportDocx's
+ *  structure (title, numbered sections, □ headlines, * notes, - bullets, · sub-bullets) but
+ *  as real text rather than a screenshot image. A corporate mail gateway (Samsung's) reliably
+ *  blocked the earlier PNG-preview version of this email even though the same content as an
+ *  attached docx or as this HTML passed -- a rendered image that's mostly dense Korean text is
+ *  a classic phishing-image signature, so the report is no longer screenshotted for email. */
+export function buildReportEmailHtml(sections: ReportSection[], dateLabel: string): string {
+  const sectionsHtml = sections
+    .map((section, i) => {
+      const itemsHtml = section.items
+        .map((item) => {
+          const noteHtml = item.note
+            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.note)}</p>`
+            : '';
+          const bulletsHtml = item.bullets
+            .map((b) => {
+              const subHtml = b.subBullets
+                .map((s) => `<p style="margin:2px 0 0 40px;font-size:12px;">· ${escapeHtml(s)}</p>`)
+                .join('');
+              return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${subHtml}`;
+            })
+            .join('');
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(item.headline)}</p>${noteHtml}${bulletsHtml}`;
+        })
+        .join('');
+      return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
+    })
+    .join('');
+
+  return `
+    <div style="border:1px solid #e5e5e5;border-radius:8px;padding:16px;margin:0 0 16px;">
+      <h2 style="text-align:center;margin:0 0 4px;font-size:16px;">Healthcare Market Intelligence</h2>
+      <p style="text-align:right;margin:0 0 8px;font-size:11px;color:#666;">${escapeHtml(dateLabel)}</p>
+      ${sectionsHtml}
+    </div>`;
+}
+
 export function buildReportSections(
   candidates: ReportCandidate[],
   deepResults: Map<number, CandidateDeepResult>,

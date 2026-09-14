@@ -49,12 +49,8 @@ export function buildDigestHtml(
   dashboardUrl: string,
   analysesById: Map<number, AiAnalysis> = new Map(),
   duplicatesById: Map<number, DuplicateRef[]> = new Map(),
-  reportImageBuffer?: Buffer,
+  reportHtml?: string,
 ): string {
-  const reportImageHtml = reportImageBuffer
-    ? `<img src="cid:report-preview" alt="Healthcare Market Intelligence" style="max-width:100%;margin:0 0 16px;border:1px solid #e5e5e5;border-radius:8px;" />`
-    : '';
-
   const cards = articles
     .map((a) => {
       const analysis = analysesById.get(a.id);
@@ -76,7 +72,7 @@ export function buildDigestHtml(
       <h2 style="margin-bottom:4px;">헬스케어 레이더</h2>
       <p style="color:#666;margin-top:0;font-size:13px;">${dateLabel} 수집 · 총 ${counts.total}건 (🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low})</p>
       <p style="margin:8px 0 16px;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 전체 보기 →</a></p>
-      ${reportImageHtml}
+      ${reportHtml ?? ''}
       <p style="margin:0 0 16px;font-size:11px;color:#999;line-height:1.5;">
         추출 기준: 키워드에 매칭된 기사만 수집 (공공기관/Tier 1 자료는 매칭 여부와 무관하게 모두 수집)<br />
         정렬 기준: 우선순위 높은 순 → 최신순<br />
@@ -109,7 +105,7 @@ export async function sendDigestEmail(
   dateLabel: string,
   analysesById: Map<number, AiAnalysis> = new Map(),
   duplicatesById: Map<number, DuplicateRef[]> = new Map(),
-  reportImageBuffer?: Buffer,
+  reportHtml?: string,
   reportDocxBuffer?: Buffer,
   // Plain ISO 'YYYY-MM-DD' (e.g. '2026-09-15'), used for the docx attachment filename in
   // place of the human dateLabel (e.g. "9월 15일 (월)") -- spaces/parens/Korean characters
@@ -134,17 +130,10 @@ export async function sendDigestEmail(
     resolveDashboardUrl(),
     analysesById,
     duplicatesById,
-    reportImageBuffer,
+    reportHtml,
   );
 
-  const attachments: Array<{ filename: string; content: string; content_id?: string }> = [];
-  if (reportImageBuffer) {
-    attachments.push({
-      filename: 'report-preview.png',
-      content: reportImageBuffer.toString('base64'),
-      content_id: 'report-preview',
-    });
-  }
+  const attachments: Array<{ filename: string; content: string }> = [];
   if (reportDocxBuffer) {
     const filenameDate = collectedDate ?? sanitizeForFilename(dateLabel);
     attachments.push({

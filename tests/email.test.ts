@@ -118,10 +118,9 @@ describe('buildDigestHtml', () => {
     expect(html).toContain('&quot;따옴표&quot;');
   });
 
-  it('embeds the report image at the top of the body and attaches the docx when both are provided', () => {
+  it('embeds the report HTML at the top of the body when provided', () => {
     const article = makeArticle({ id: 1 });
-    const reportImageBuffer = Buffer.from('fake-png-bytes');
-    const reportDocxBuffer = Buffer.from('fake-docx-bytes');
+    const reportHtml = '<div>Healthcare Market Intelligence 리포트 본문</div>';
 
     const html = buildDigestHtml(
       [article],
@@ -130,16 +129,16 @@ describe('buildDigestHtml', () => {
       'https://healthcare-radar.vercel.app',
       new Map(),
       new Map(),
-      reportImageBuffer,
+      reportHtml,
     );
 
-    expect(html.indexOf('cid:report-preview')).toBeGreaterThan(-1);
-    expect(html.indexOf('cid:report-preview')).toBeLessThan(html.indexOf(article.title));
+    expect(html.indexOf(reportHtml)).toBeGreaterThan(-1);
+    expect(html.indexOf(reportHtml)).toBeLessThan(html.indexOf(article.title));
   });
 
-  it('omits the report image markup entirely when no report was generated that day', () => {
+  it('omits any report markup when no report was generated that day', () => {
     const article = makeArticle({ id: 1 });
     const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
-    expect(html).not.toContain('cid:report-preview');
+    expect(html).not.toContain('Healthcare Market Intelligence');
   });
 });
