@@ -151,11 +151,12 @@ const DEEP_RESPONSE_SCHEMA = {
     note: { type: 'string' },
     bullets: {
       type: 'array',
+      maxItems: 2,
       items: {
         type: 'object',
         properties: {
           text: { type: 'string' },
-          sub_bullets: { type: 'array', items: { type: 'string' } },
+          sub_bullets: { type: 'array', maxItems: 2, items: { type: 'string' } },
         },
         required: ['text', 'sub_bullets'],
       },
@@ -168,7 +169,14 @@ const DEEP_RESPONSE_SCHEMA = {
 
 function buildDeepPrompt(title: string, fullText: string): string {
   return `당신은 보험사 헬스케어 사업팀의 "Healthcare Market Intelligence" 보고서를 작성하는 애널리스트입니다.
-아래 기사 전문을 읽고, 사내 보고서에 쓸 수 있도록 사실 위주로 정리하세요.
+아래 기사 전문을 읽고, 임원에게 그대로 보고할 수 있는 수준으로 핵심만 압축해서 정리하세요.
+
+**분량 규칙 (반드시 준수 -- 보고서 전체 분량을 좌우하는 가장 중요한 규칙):**
+- bullets는 최대 2개까지만. 그 이상 담을 내용이 있어도 가장 중요한 2개만 선택.
+- 각 bullet의 sub_bullets도 최대 2개까지만.
+- 두괄식: 가장 중요한 결론/판단을 bullets[0]에 먼저 쓰고, 나머지는 그걸 뒷받침하는 순서로.
+- 한 bullet(또는 sub_bullet)에는 메시지 하나만 담을 것 -- 여러 사실을 쉼표로 나열해 욱여넣지 말 것.
+- bullets의 text는 "주요 내용·판단·결정사항" 수준으로 (세부 수치 나열이 아니라 그래서 무엇이 어떻게 됐는지), sub_bullets는 그 판단을 뒷받침하는 근거·수치·사례 수준으로.
 
 **문체 규칙 (headline, note, bullets의 text/sub_bullets에 모두 적용):**
 - 완전한 문장이 아니라 압축된 개조식으로 작성. "~습니다/~합니다/~했다/~이다/~함/~임/~됨" 등 문장 종결 어미를 쓰지 말고, 명사(구)로 끝낼 것.
@@ -197,9 +205,9 @@ ${fullText.slice(0, 6000)}
   - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
 - headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제")
 - note: 기사에 나온 전문용어나 낯선 약어에 대한 한 줄 설명, "용어: 설명" 형식. 없으면 빈 문자열("")
-- bullets: 핵심 사실을 나열한 배열. 각 항목은:
-  - text: 위 문체 규칙을 따른, 구체적인 수치·날짜·기관명·조건을 포함한 압축된 사실 한 줄
-  - sub_bullets: text를 뒷받침하는 더 세부적인 사실들, 같은 문체 규칙 적용 (없으면 빈 배열 [])
+- bullets: 가장 중요한 순서로 최대 2개. 각 항목은:
+  - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
+  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 최대 2개, 같은 문체 규칙 적용 (없으면 빈 배열 [])
 - background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). 해당 없으면 빈 문자열("")
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
 
