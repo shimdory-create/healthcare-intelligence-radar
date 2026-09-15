@@ -131,11 +131,14 @@ export interface DeepAnalysisResult {
   /** report-style headline, rewritten by Gemini rather than reusing the source article's own
    *  (news-style) title -- see buildDeepPrompt's headline rules. */
   headline: string;
-  note: string | null;
-  bullets: { text: string; subBullets: string[] }[];
+  /** each bullet carries its own optional term-glossary note (rendered directly under that
+   *  bullet, not off in a fixed slot under the headline) so a note always sits next to the
+   *  term it's explaining, whichever bullet that happens to be. */
+  bullets: { text: string; note: string | null; subBullets: string[] }[];
   /** background/context info about a company or institution named in the article (e.g. a past
    *  certification, an unrelated business line) -- rendered with a "※ " prefix after the
-   *  item's bullets, distinct from `note`'s term-glossary role. Null when nothing applies. */
+   *  item's bullets, distinct from a bullet's own term-glossary note. Null when nothing
+   *  applies. */
   background: string | null;
   /** true when the article is supplementary/FYI rather than core news -- e.g. an online-buzz
    *  or celebrity-mention piece with no direct product/policy/pricing impact. Rendered as a
@@ -148,7 +151,6 @@ const DEEP_RESPONSE_SCHEMA = {
   properties: {
     category: { type: 'string', enum: ['국내 보험·제도', '국내 산업', 'Global'] },
     headline: { type: 'string' },
-    note: { type: 'string' },
     bullets: {
       type: 'array',
       maxItems: 2,
@@ -156,15 +158,16 @@ const DEEP_RESPONSE_SCHEMA = {
         type: 'object',
         properties: {
           text: { type: 'string' },
+          note: { type: 'string' },
           sub_bullets: { type: 'array', maxItems: 2, items: { type: 'string' } },
         },
-        required: ['text', 'sub_bullets'],
+        required: ['text', 'note', 'sub_bullets'],
       },
     },
     background: { type: 'string' },
     is_reference: { type: 'boolean' },
   },
-  required: ['category', 'headline', 'note', 'bullets', 'background', 'is_reference'],
+  required: ['category', 'headline', 'bullets', 'background', 'is_reference'],
 };
 
 function buildDeepPrompt(title: string, fullText: string): string {
@@ -178,10 +181,10 @@ function buildDeepPrompt(title: string, fullText: string): string {
 - 한 bullet(또는 sub_bullet)에는 메시지 하나만 담을 것 -- 여러 사실을 쉼표로 나열해 욱여넣지 말 것.
 - bullets의 text는 "주요 내용·판단·결정사항" 수준으로 (세부 수치 나열이 아니라 그래서 무엇이 어떻게 됐는지), sub_bullets는 그 판단을 뒷받침하는 근거·수치·사례 수준으로.
 
-**문체 규칙 (headline, note, bullets의 text/sub_bullets에 모두 적용):**
+**문체 규칙 (headline, bullets의 text/note/sub_bullets에 모두 적용):**
 - 완전한 문장이 아니라 압축된 개조식으로 작성. "~습니다/~합니다/~했다/~이다/~함/~임/~됨" 등 문장 종결 어미를 쓰지 말고, 명사(구)로 끝낼 것.
 - 조사(을/를/이/가/은/는)는 자연스러운 범위에서 생략하고 명사구 중심으로 압축.
-- 기관명 약칭은 아래 목록에 있는 것만 사용: 건강보험심사평가원→심평원, 국민건강보험공단→건보공단, 식품의약품안전처→식약처, 보건복지부→복지부, 질병관리청→질병청. 그 외 기관·위원회·협회명(예: 건강보험정책심의위원회)은 임의로 줄여쓰지 말 것 -- 본문에 이미 약칭으로 나와 있으면 그대로 쓰되, headline과 bullets 중 처음 등장하는 곳에서 note에 전체 명칭을 반드시 병기.
+- 기관명 약칭은 아래 목록에 있는 것만 사용, 그리고 이 목록에 있는 약칭은 이미 널리 알려진 것이므로 note로 따로 설명하지 말 것: 건강보험심사평가원→심평원, 국민건강보험공단→건보공단, 식품의약품안전처→식약처, 보건복지부→복지부, 질병관리청→질병청. 그 외 기관·위원회·협회명(예: 건강보험정책심의위원회)은 임의로 줄여쓰지 말 것 -- 본문에 이미 약칭으로 나와 있으면 그대로 쓰되, 그 약칭이 처음 등장하는 bullet의 note에 전체 명칭을 반드시 병기.
 - 수치 비교·추이는 기호로 압축: 순서/추이는 화살표(→), 증감은 %↑ / %↓, 비교 기준은 괄호나 "–"로 병기.
 - 날짜는 숫자로 간결하게 (예: "9월 11일" 대신 "9.11" 또는 문맥상 자연스러우면 "11일").
 - 예외·단서를 말할 때는 "단, ~" 형태로 문장을 시작.
@@ -204,11 +207,11 @@ ${fullText.slice(0, 6000)}
   - "국내 산업": 국내 제약사·의료기기·헬스케어 기업의 사업 활동
   - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
 - headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제")
-- note: 기사에 나온 전문용어나 낯선 약어(위 화이트리스트 외의 기관 약칭 포함)에 대한 한 줄 설명, "용어: 설명" 형식. 없으면 빈 문자열("")
 - bullets: 최대 2개 (상한선일 뿐 목표 아님 -- 1개로 충분하면 1개만). 각 항목은:
   - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
+  - note: 이 bullet의 text(또는 headline에서 이 bullet과 관련된 부분)에 나온 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함)에 대한 한 줄 설명, "용어: 설명" 형식. 정말 이해에 필요한 경우에만 채울 것 -- 화이트리스트 약칭이나 이미 널리 알려진 용어는 설명하지 말고, 해당 없으면 빈 문자열("")
   - sub_bullets: text를 뒷받침하는 근거·수치·사례, 최대 2개 (역시 상한선, 필요한 만큼만), 같은 문체 규칙 적용 (없으면 빈 배열 [])
-- background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). 해당 없으면 빈 문자열("")
+- background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). **없으면 없는 대로 두는 게 기본값** -- 이해에 꼭 필요한 경우에만 채우고, 그렇지 않으면 빈 문자열("")
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
 
 지어내지 말고, 본문에 실제로 나온 내용만 사용하세요. 불필요하게 길게 쓰지 마세요.`;
@@ -222,8 +225,7 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   const parsed = (await callGemini(buildDeepPrompt(title, fullText), DEEP_RESPONSE_SCHEMA)) as {
     category: DeepAnalysisResult['category'];
     headline: string;
-    note: string;
-    bullets: { text: string; sub_bullets: string[] }[];
+    bullets: { text: string; note: string; sub_bullets: string[] }[];
     background: string;
     is_reference: boolean;
   };
@@ -231,8 +233,7 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   return {
     category: parsed.category,
     headline: parsed.headline,
-    note: parsed.note || null,
-    bullets: parsed.bullets.map((b) => ({ text: b.text, subBullets: b.sub_bullets })),
+    bullets: parsed.bullets.map((b) => ({ text: b.text, note: b.note || null, subBullets: b.sub_bullets })),
     background: parsed.background || null,
     isReference: parsed.is_reference,
   };

@@ -5,16 +5,23 @@ import { sourceDisplayName } from './sourceLookup';
 
 export interface ReportBullet {
   text: string;
+  /** term-glossary note for this specific bullet -- rendered directly under it, so the
+   *  explanation always sits next to the term it's explaining rather than in one fixed slot
+   *  under the headline regardless of which bullet actually used the term. */
+  note: string | null;
   subBullets: string[];
 }
 
 export interface ReportItem {
   headline: string;
-  note: string | null;
+  /** the "N개 매체 보도 (매체1, 매체2, ...)" line for multi-outlet items -- distinct from a
+   *  bullet's own term-glossary `note`; computed from the candidate's duplicate-group data,
+   *  not from Gemini. Null for single-outlet items. */
+  outletNote: string | null;
   bullets: ReportBullet[];
   /** background/context about a company or institution named in the item (e.g. a past
    *  certification, an unrelated business line) -- rendered with a "※ " prefix after the
-   *  bullets, distinct from `note`'s term-glossary role. */
+   *  bullets, distinct from a bullet's own term-glossary note. */
   background: string | null;
   /** true for supplementary/FYI items (e.g. online-buzz pieces with no direct policy/product
    *  impact) -- rendered as a "(참고) " headline prefix rather than a separate section. */
@@ -45,22 +52,25 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
     .map((section, i) => {
       const itemsHtml = section.items
         .map((item) => {
-          const noteHtml = item.note
-            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.note)}</p>`
+          const outletNoteHtml = item.outletNote
+            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.outletNote)}</p>`
             : '';
           const bulletsHtml = item.bullets
             .map((b) => {
+              const bulletNoteHtml = b.note
+                ? `<p style="margin:2px 0 0 36px;font-size:11px;color:#777;">* ${escapeHtml(b.note)}</p>`
+                : '';
               const subHtml = b.subBullets
                 .map((s) => `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s)}</p>`)
                 .join('');
-              return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${subHtml}`;
+              return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${bulletNoteHtml}${subHtml}`;
             })
             .join('');
           const backgroundHtml = item.background
             ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
             : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${noteHtml}${bulletsHtml}${backgroundHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -89,18 +99,15 @@ export function buildReportSections(
     // from the report; it's still visible in the regular digest below.
     if (!deep) continue;
 
-    let note = deep.note;
-    if (candidate.isMultiOutlet) {
-      const outletNames = candidate.outletSourceIds.map(sourceDisplayName).join(', ');
-      const outletNote = `${candidate.outletCount}개 매체 보도 (${outletNames})`;
-      note = note ? `${outletNote} — ${note}` : outletNote;
-    }
+    const outletNote = candidate.isMultiOutlet
+      ? `${candidate.outletCount}개 매체 보도 (${candidate.outletSourceIds.map(sourceDisplayName).join(', ')})`
+      : null;
 
     const sectionName: SectionName = candidate.isMultiOutlet ? '다수매체 보도' : deep.category;
 
     byName.get(sectionName)!.push({
       headline: deep.headline,
-      note,
+      outletNote,
       bullets: deep.bullets,
       background: deep.background,
       isReference: deep.isReference,
@@ -240,9 +247,10 @@ export async function buildReportDocx(
     children.push(sectionHeadingPara(`${sectionIndex + 1}. ${section.title}`));
     for (const item of section.items) {
       children.push(headlinePara(item.isReference ? `(참고) ${item.headline}` : item.headline));
-      if (item.note) children.push(notePara(item.note));
+      if (item.outletNote) children.push(notePara(item.outletNote));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));
+        if (bullet.note) children.push(notePara(bullet.note));
         for (const sub of bullet.subBullets) children.push(subBulletPara(sub));
       }
       if (item.background) children.push(backgroundPara(item.background));

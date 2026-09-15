@@ -27,8 +27,7 @@ describe('buildReportSections', () => {
           articleId: 1,
           category: '국내 보험·제도',
           headline: '지텍정 약가협상 헤드라인',
-          note: null,
-          bullets: [{ text: 't', subBullets: [] }],
+          bullets: [{ text: 't', note: null, subBullets: [] }],
           background: null,
           isReference: false,
         },
@@ -43,8 +42,8 @@ describe('buildReportSections', () => {
         items: [
           {
             headline: '지텍정 약가협상 헤드라인',
-            note: null,
-            bullets: [{ text: 't', subBullets: [] }],
+            outletNote: null,
+            bullets: [{ text: 't', note: null, subBullets: [] }],
             background: null,
             isReference: false,
           },
@@ -53,10 +52,31 @@ describe('buildReportSections', () => {
     ]);
   });
 
+  it('carries a bullet-level note through unchanged', () => {
+    const candidates = [makeCandidate({ id: 1 })];
+    const deep = new Map<number, CandidateDeepResult>([
+      [
+        1,
+        {
+          articleId: 1,
+          category: '국내 산업',
+          headline: 'h',
+          bullets: [{ text: 't', note: '건정심: 건강보험정책심의위원회', subBullets: [] }],
+          background: null,
+          isReference: false,
+        },
+      ],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items[0].bullets[0].note).toBe('건정심: 건강보험정책심의위원회');
+  });
+
   it('uses the deep-analysis headline instead of the source article title', () => {
     const candidates = [makeCandidate({ id: 1, title: '원본 뉴스 제목' })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '압축된 보고서용 헤드라인', note: null, bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '압축된 보고서용 헤드라인', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -70,7 +90,7 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 2, title: '딥분석 못 받음' }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '딥분석 됨', note: null, bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '딥분석 됨', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -91,7 +111,7 @@ describe('buildReportSections', () => {
   it('carries the background field through when Gemini provides one', () => {
     const candidates = [makeCandidate({ id: 1 })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', note: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -102,7 +122,7 @@ describe('buildReportSections', () => {
   it('marks an item isReference when Gemini flags it as supplementary/FYI', () => {
     const candidates = [makeCandidate({ id: 1, title: '온라인 화제 기사' })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', note: null, bullets: [], background: null, isReference: true }],
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -118,10 +138,10 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 4, title: '핵심2' }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '참고1', note: null, bullets: [], background: null, isReference: true }],
-      [2, { articleId: 2, category: '국내 산업', headline: '핵심1', note: null, bullets: [], background: null, isReference: false }],
-      [3, { articleId: 3, category: '국내 산업', headline: '참고2', note: null, bullets: [], background: null, isReference: true }],
-      [4, { articleId: 4, category: '국내 산업', headline: '핵심2', note: null, bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '참고1', bullets: [], background: null, isReference: true }],
+      [2, { articleId: 2, category: '국내 산업', headline: '핵심1', bullets: [], background: null, isReference: false }],
+      [3, { articleId: 3, category: '국내 산업', headline: '참고2', bullets: [], background: null, isReference: true }],
+      [4, { articleId: 4, category: '국내 산업', headline: '핵심2', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -141,7 +161,7 @@ describe('buildReportSections', () => {
       }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', note: null, bullets: [], background: null, isReference: false }],
+      [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -152,7 +172,7 @@ describe('buildReportSections', () => {
         items: [
           {
             headline: 'GC녹십자 mRNA',
-            note: '4개 매체 보도 (연합뉴스, 조선일보, 동아일보, 중앙일보)',
+            outletNote: '4개 매체 보도 (연합뉴스, 조선일보, 동아일보, 중앙일보)',
             bullets: [],
             background: null,
             isReference: false,
@@ -162,7 +182,7 @@ describe('buildReportSections', () => {
     ]);
   });
 
-  it('prefixes the outlet-count-and-names note onto an existing glossary note for multi-outlet items', () => {
+  it('does not touch a bullet-level note when also computing the multi-outlet note', () => {
     const candidates = [
       makeCandidate({
         id: 3,
@@ -173,12 +193,24 @@ describe('buildReportSections', () => {
       }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [3, { articleId: 3, category: 'Global', headline: 'h', note: '용어 설명', bullets: [], background: null, isReference: false }],
+      [3, { articleId: 3, category: 'Global', headline: 'h', bullets: [{ text: 't', note: '용어 설명', subBullets: [] }], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
 
-    expect(sections[0].items[0].note).toBe('3개 매체 보도 (연합뉴스, 조선일보, 동아일보) — 용어 설명');
+    expect(sections[0].items[0].outletNote).toBe('3개 매체 보도 (연합뉴스, 조선일보, 동아일보)');
+    expect(sections[0].items[0].bullets[0].note).toBe('용어 설명');
+  });
+
+  it('sets outletNote to null for a single-outlet item', () => {
+    const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: false }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items[0].outletNote).toBeNull();
   });
 
   it('keeps the fixed section order and omits empty sections', () => {
@@ -187,8 +219,8 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 2, priority: 'medium', outletCount: 3, isMultiOutlet: true }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: 'Global', headline: 'h1', note: null, bullets: [], background: null, isReference: false }],
-      [2, { articleId: 2, category: '국내 산업', headline: 'h2', note: null, bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: 'Global', headline: 'h1', bullets: [], background: null, isReference: false }],
+      [2, { articleId: 2, category: '국내 산업', headline: 'h2', bullets: [], background: null, isReference: false }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -198,15 +230,15 @@ describe('buildReportSections', () => {
 });
 
 describe('buildReportEmailHtml', () => {
-  it('renders section titles, headlines, notes, bullets, and sub-bullets as plain HTML text', () => {
+  it('renders section titles, headlines, outlet notes, bullets, and sub-bullets as plain HTML text', () => {
     const sections: ReportSection[] = [
       {
         title: '국내 산업',
         items: [
           {
             headline: '테스트 헤드라인',
-            note: '테스트 노트',
-            bullets: [{ text: '사실 1', subBullets: ['세부 1'] }],
+            outletNote: '테스트 노트',
+            bullets: [{ text: '사실 1', note: null, subBullets: ['세부 1'] }],
             background: null,
             isReference: false,
           },
@@ -225,9 +257,46 @@ describe('buildReportEmailHtml', () => {
     expect(html).not.toContain('<img');
   });
 
+  it('renders a bullet-level note directly under that bullet, not under the headline', () => {
+    const sections: ReportSection[] = [
+      {
+        title: '국내 산업',
+        items: [
+          {
+            headline: 'h',
+            outletNote: null,
+            bullets: [{ text: '건정심 재평가 착수', note: '건정심: 건강보험정책심의위원회', subBullets: [] }],
+            background: null,
+            isReference: false,
+          },
+        ],
+      },
+    ];
+
+    const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
+
+    const bulletIdx = html.indexOf('건정심 재평가 착수');
+    const noteIdx = html.indexOf('건정심: 건강보험정책심의위원회');
+    expect(bulletIdx).toBeGreaterThan(-1);
+    expect(noteIdx).toBeGreaterThan(bulletIdx);
+  });
+
+  it('omits a bullet-level note line when the bullet has none', () => {
+    const sections: ReportSection[] = [
+      {
+        title: '국내 산업',
+        items: [{ headline: 'h', outletNote: null, bullets: [{ text: '사실', note: null, subBullets: [] }], background: null, isReference: false }],
+      },
+    ];
+
+    const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
+
+    expect(html).not.toContain('* ');
+  });
+
   it('prefixes the headline with "(참고)" for reference-only items', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: '온라인 화제 기사', note: null, bullets: [], background: null, isReference: true }] },
+      { title: '국내 산업', items: [{ headline: '온라인 화제 기사', outletNote: null, bullets: [], background: null, isReference: true }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -237,7 +306,7 @@ describe('buildReportEmailHtml', () => {
 
   it('does not prefix headlines for core (non-reference) items', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: '핵심 뉴스', note: null, bullets: [], background: null, isReference: false }] },
+      { title: '국내 산업', items: [{ headline: '핵심 뉴스', outletNote: null, bullets: [], background: null, isReference: false }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -250,7 +319,7 @@ describe('buildReportEmailHtml', () => {
     const sections: ReportSection[] = [
       {
         title: '국내 산업',
-        items: [{ headline: 'h', note: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
+        items: [{ headline: 'h', outletNote: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
       },
     ];
 
@@ -261,7 +330,7 @@ describe('buildReportEmailHtml', () => {
 
   it('omits the "※" line when background is null', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: 'h', note: null, bullets: [], background: null, isReference: false }] },
+      { title: '국내 산업', items: [{ headline: 'h', outletNote: null, bullets: [], background: null, isReference: false }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -279,8 +348,8 @@ describe('buildReportDocx', () => {
         items: [
           {
             headline: '테스트 헤드라인',
-            note: '테스트 노트',
-            bullets: [{ text: '사실 1', subBullets: ['세부 1'] }],
+            outletNote: '테스트 노트',
+            bullets: [{ text: '사실 1', note: '용어 설명', subBullets: ['세부 1'] }],
             background: '배경 정보',
             isReference: false,
           },

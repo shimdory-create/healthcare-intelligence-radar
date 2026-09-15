@@ -81,8 +81,9 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: '사노피, 독감백신 전국 공급 개시',
-        note: '',
-        bullets: [{ text: '9월 8일부터 전국 공급 개시', sub_bullets: ['표준용량 대비 항원 4배'] }],
+        bullets: [
+          { text: '9월 8일부터 전국 공급 개시', note: '', sub_bullets: ['표준용량 대비 항원 4배'] },
+        ],
         background: '',
         is_reference: false,
       }),
@@ -93,11 +94,27 @@ describe('analyzeDeep', () => {
     expect(result).toEqual({
       category: '국내 산업',
       headline: '사노피, 독감백신 전국 공급 개시',
-      note: null,
-      bullets: [{ text: '9월 8일부터 전국 공급 개시', subBullets: ['표준용량 대비 항원 4배'] }],
+      bullets: [{ text: '9월 8일부터 전국 공급 개시', note: null, subBullets: ['표준용량 대비 항원 4배'] }],
       background: null,
       isReference: false,
     });
+  });
+
+  it('carries a bullet-level note through when Gemini provides one', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 보험·제도',
+        headline: 'h',
+        bullets: [{ text: 't', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
+        background: '',
+        is_reference: false,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.bullets[0].note).toBe('건정심: 건강보험정책심의위원회');
   });
 
   it('throws when GEMINI_API_KEY is not set, same as analyzeArticles', async () => {
