@@ -134,6 +134,15 @@ const TITLE_SIZE = 44;
 const BODY_SIZE = 28;
 const NOTE_SIZE = 20;
 
+// A slight (-0.5pt per character) global tightening applied to headline/bullet/note text --
+// docx's characterSpacing is in twips (1/20 pt), so -10 = -0.5pt. This is "방법 1" from the
+// 2026-09-15 discussion: a line that overflows by only 1-2 characters often fits back onto one
+// line with a barely-perceptible per-character compression, without needing to calculate each
+// paragraph's exact wrap point (which would need real font metrics this environment can't
+// verify -- no local Word/LibreOffice to render against). Doesn't guarantee every overflow is
+// fixed, only reduces how often one happens.
+const CHAR_SPACING = -10;
+
 function titlePara(text: string): Paragraph {
   return new Paragraph({
     alignment: AlignmentType.CENTER,
@@ -160,8 +169,8 @@ function sectionHeadingPara(text: string): Paragraph {
 function headlinePara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '□ ', size: BODY_SIZE, font: FONT }),
-      new TextRun({ text, bold: true, underline: {}, size: BODY_SIZE, font: FONT }),
+      new TextRun({ text: '□ ', size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
+      new TextRun({ text, bold: true, underline: {}, size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
     ],
     spacing: { before: 200, after: 40, ...LINE_SPACING },
     indent: { left: 460, hanging: 260 },
@@ -170,7 +179,9 @@ function headlinePara(text: string): Paragraph {
 
 function notePara(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555' })],
+    children: [
+      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+    ],
     spacing: { after: 60, ...SINGLE_LINE_SPACING },
     indent: { left: 800, hanging: 180 },
   });
@@ -178,7 +189,9 @@ function notePara(text: string): Paragraph {
 
 function backgroundPara(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: `※ ${text}`, size: NOTE_SIZE, font: FONT, color: '555555' })],
+    children: [
+      new TextRun({ text: `※ ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+    ],
     spacing: { before: 40, after: 60, ...LINE_SPACING },
     indent: { left: 460, hanging: 260 },
   });
@@ -187,8 +200,8 @@ function backgroundPara(text: string): Paragraph {
 function bulletPara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: '- ', size: BODY_SIZE, font: FONT }),
-      new TextRun({ text, size: BODY_SIZE, font: FONT }),
+      new TextRun({ text: '- ', size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
+      new TextRun({ text, size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
     ],
     spacing: { after: 60, ...LINE_SPACING },
     indent: { left: 620, hanging: 200 },
@@ -200,8 +213,8 @@ function subBulletPara(text: string): Paragraph {
     children: [
       // no trailing space after "·" -- the glyph's own right-side bearing already reads as a
       // gap, so an explicit space on top of it left a visibly wider gap than "□ "/"- " get
-      new TextRun({ text: '·', size: BODY_SIZE, font: FONT }),
-      new TextRun({ text, size: BODY_SIZE, font: FONT }),
+      new TextRun({ text: '·', size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
+      new TextRun({ text, size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
     ],
     spacing: { after: 40, ...LINE_SPACING },
     indent: { left: 880, hanging: 200 },
