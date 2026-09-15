@@ -21,15 +21,24 @@ export async function GET(req: NextRequest) {
   const enriched = await Promise.all(
     candidates.map(async (c) => {
       const text = await extractArticleText(c.url);
+      let rawStatus: number | string = 'n/a';
+      try {
+        const res = await fetch(c.url, { signal: AbortSignal.timeout(15000) });
+        rawStatus = res.status;
+      } catch (err) {
+        rawStatus = `fetch error: ${err instanceof Error ? err.message : String(err)}`;
+      }
       return {
         id: c.id,
         title: c.title,
+        url: c.url,
         priority: c.priority,
         outletCount: c.outletCount,
         outletSourceIds: c.outletSourceIds,
         reason: c.priority === 'high' ? 'high' : `multi-outlet(${c.outletCount})`,
         extractOk: !!text,
         extractLen: text?.length ?? 0,
+        rawStatusNoUserAgent: rawStatus,
       };
     }),
   );
