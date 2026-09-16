@@ -142,8 +142,16 @@ export interface DeepAnalysisResult {
   background: string | null;
   /** true when the article is supplementary/FYI rather than core news -- e.g. an online-buzz
    *  or celebrity-mention piece with no direct product/policy/pricing impact. Rendered as a
-   *  "(참고)" prefix on the headline rather than a separate section. */
+   *  "(참고)" prefix on the headline rather than a separate section. Distinct from isRelevant:
+   *  this means "relevant but secondary," not "irrelevant." */
   isReference: boolean;
+  /** false when the article has no business relevance to insurance/healthcare at all (a job
+   *  posting, an individual's award, routine internal-administration news) -- report.ts drops
+   *  such candidates entirely, the same as a candidate with no deep result. This is the gate
+   *  the multi-outlet promotion path (getReportCandidates' outlet-count rule) otherwise lacks
+   *  entirely; analyzeArticles' 1차 priority prompt already judges relevance for the 'high'
+   *  path, so this doubles as a second check there too. */
+  isRelevant: boolean;
 }
 
 const DEEP_RESPONSE_SCHEMA = {
@@ -166,8 +174,9 @@ const DEEP_RESPONSE_SCHEMA = {
     },
     background: { type: 'string' },
     is_reference: { type: 'boolean' },
+    is_relevant: { type: 'boolean' },
   },
-  required: ['category', 'headline', 'bullets', 'background', 'is_reference'],
+  required: ['category', 'headline', 'bullets', 'background', 'is_reference', 'is_relevant'],
 };
 
 function buildDeepPrompt(title: string, fullText: string): string {
@@ -214,6 +223,10 @@ ${fullText.slice(0, 6000)}
 - background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). **bullets/sub_bullets에 이미 나온 사실을 반복하지 말 것** -- 거기 없는 추가 맥락일 때만 의미가 있음. 없으면 없는 대로 두는 게 기본값 -- 이해에 꼭 필요한 경우에만 채우고, 그렇지 않으면 빈 문자열("")
   예: sub_bullets에 이미 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"이 있는데 background에 똑같이 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"을 또 쓰는 것은 잘못된 예 -- 이 경우 background는 빈 문자열("")이어야 함
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
+- is_relevant: 이 기사가 보험사 헬스케어 사업 관점에서 조금이라도 관련이 있으면 true, 전혀 무관하면 false. is_reference와 다른 개념 -- is_reference는 "관련은 있지만 부차적"이고, is_relevant=false는 "애초에 사업과 아무 상관 없음". 아래는 이 보고서에 실제로 잘못 포함됐던 사례이니 반드시 false로 판정할 것:
+  - "OO기관 하반기 신규직원 OOO명 모집" 같은 채용 공고
+  - "OOO 전공의, OO학회 최우수상 수상" 같은 개인 수상·인사 소식
+  일반적으로: 채용/인사/개인 수상, 단순 행사 개최 예고(내용 없이 일정만), 기관 내부 행정(민원 처리 개선 등)처럼 보험사의 상품·서비스·정책 판단에 아무 영향을 주지 않는 기사는 매체 수와 무관하게 false. 반대로 제도·가격·신제품·임상·규제처럼 실제로 무언가가 바뀌거나 영향을 주는 내용이면 true.
 
 지어내지 말고, 본문에 실제로 나온 내용만 사용하세요. 불필요하게 길게 쓰지 마세요.`;
 }
@@ -229,6 +242,7 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
     bullets: { text: string; note: string; sub_bullets: string[] }[];
     background: string;
     is_reference: boolean;
+    is_relevant: boolean;
   };
 
   return {
@@ -237,5 +251,6 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
     bullets: parsed.bullets.map((b) => ({ text: b.text, note: b.note || null, subBullets: b.sub_bullets })),
     background: parsed.background || null,
     isReference: parsed.is_reference,
+    isRelevant: parsed.is_relevant,
   };
 }

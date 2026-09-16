@@ -86,6 +86,7 @@ describe('analyzeDeep', () => {
         ],
         background: '',
         is_reference: false,
+        is_relevant: true,
       }),
     );
 
@@ -97,7 +98,26 @@ describe('analyzeDeep', () => {
       bullets: [{ text: '9월 8일부터 전국 공급 개시', note: null, subBullets: ['표준용량 대비 항원 4배'] }],
       background: null,
       isReference: false,
+      isRelevant: true,
     });
+  });
+
+  it('carries isRelevant=false through when Gemini judges the article has no business relevance', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 산업',
+        headline: '건보공단, 신규직원 채용',
+        bullets: [{ text: '채용 인원 374명', note: '', sub_bullets: [] }],
+        background: '',
+        is_reference: false,
+        is_relevant: false,
+      }),
+    );
+
+    const result = await analyzeDeep('건보공단 채용공고', '본문');
+
+    expect(result.isRelevant).toBe(false);
   });
 
   it('carries a bullet-level note through when Gemini provides one', async () => {
@@ -109,6 +129,7 @@ describe('analyzeDeep', () => {
         bullets: [{ text: 't', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
         background: '',
         is_reference: false,
+        is_relevant: true,
       }),
     );
 

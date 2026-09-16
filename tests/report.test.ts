@@ -30,6 +30,7 @@ describe('buildReportSections', () => {
           bullets: [{ text: 't', note: null, subBullets: [] }],
           background: null,
           isReference: false,
+          isRelevant: true,
         },
       ],
     ]);
@@ -64,6 +65,7 @@ describe('buildReportSections', () => {
           bullets: [{ text: 't', note: '건정심: 건강보험정책심의위원회', subBullets: [] }],
           background: null,
           isReference: false,
+          isRelevant: true,
         },
       ],
     ]);
@@ -76,7 +78,7 @@ describe('buildReportSections', () => {
   it('uses the deep-analysis headline instead of the source article title', () => {
     const candidates = [makeCandidate({ id: 1, title: '원본 뉴스 제목' })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '압축된 보고서용 헤드라인', bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '압축된 보고서용 헤드라인', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -90,7 +92,7 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 2, title: '딥분석 못 받음' }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '딥분석 됨', bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '딥분석 됨', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -98,6 +100,42 @@ describe('buildReportSections', () => {
     expect(sections).toHaveLength(1);
     expect(sections[0].items).toHaveLength(1);
     expect(sections[0].items[0].headline).toBe('딥분석 됨');
+  });
+
+  it('excludes a candidate whose deep analysis judges it has no business relevance, even if high priority', () => {
+    const candidates = [
+      makeCandidate({ id: 1, title: '건보공단 채용공고', priority: 'high' }),
+      makeCandidate({ id: 2, title: '실제 관련 뉴스', priority: 'high' }),
+    ];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: '건보공단 채용', bullets: [], background: null, isReference: false, isRelevant: false }],
+      [2, { articleId: 2, category: '국내 산업', headline: '실제 관련 뉴스', bullets: [], background: null, isReference: false, isRelevant: true }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items).toHaveLength(1);
+    expect(sections[0].items[0].headline).toBe('실제 관련 뉴스');
+  });
+
+  it('excludes an irrelevant multi-outlet candidate the same way (the gap the outlet-count rule otherwise leaves open)', () => {
+    const candidates = [
+      makeCandidate({
+        id: 1,
+        title: '전공의 수상 소식',
+        priority: 'medium',
+        outletCount: 3,
+        outletSourceIds: ['bosa', 'monews', 'rapportian'],
+        isMultiOutlet: true,
+      }),
+    ];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: '전공의 수상', bullets: [], background: null, isReference: false, isRelevant: false }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections).toEqual([]);
   });
 
   it('produces no sections at all when nothing has deep analysis', () => {
@@ -111,7 +149,7 @@ describe('buildReportSections', () => {
   it('carries the background field through when Gemini provides one', () => {
     const candidates = [makeCandidate({ id: 1 })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -122,7 +160,7 @@ describe('buildReportSections', () => {
   it('marks an item isReference when Gemini flags it as supplementary/FYI', () => {
     const candidates = [makeCandidate({ id: 1, title: '온라인 화제 기사' })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: true }],
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: true, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -138,10 +176,10 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 4, title: '핵심2' }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: '참고1', bullets: [], background: null, isReference: true }],
-      [2, { articleId: 2, category: '국내 산업', headline: '핵심1', bullets: [], background: null, isReference: false }],
-      [3, { articleId: 3, category: '국내 산업', headline: '참고2', bullets: [], background: null, isReference: true }],
-      [4, { articleId: 4, category: '국내 산업', headline: '핵심2', bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: '참고1', bullets: [], background: null, isReference: true, isRelevant: true }],
+      [2, { articleId: 2, category: '국내 산업', headline: '핵심1', bullets: [], background: null, isReference: false, isRelevant: true }],
+      [3, { articleId: 3, category: '국내 산업', headline: '참고2', bullets: [], background: null, isReference: true, isRelevant: true }],
+      [4, { articleId: 4, category: '국내 산업', headline: '핵심2', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -161,7 +199,7 @@ describe('buildReportSections', () => {
       }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', bullets: [], background: null, isReference: false }],
+      [2, { articleId: 2, category: '국내 산업', headline: 'GC녹십자 mRNA', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -193,7 +231,7 @@ describe('buildReportSections', () => {
       }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [3, { articleId: 3, category: 'Global', headline: 'h', bullets: [{ text: 't', note: '용어 설명', subBullets: [] }], background: null, isReference: false }],
+      [3, { articleId: 3, category: 'Global', headline: 'h', bullets: [{ text: 't', note: '용어 설명', subBullets: [] }], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -205,7 +243,7 @@ describe('buildReportSections', () => {
   it('sets outletNote to null for a single-outlet item', () => {
     const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);
@@ -219,8 +257,8 @@ describe('buildReportSections', () => {
       makeCandidate({ id: 2, priority: 'medium', outletCount: 3, isMultiOutlet: true }),
     ];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: 'Global', headline: 'h1', bullets: [], background: null, isReference: false }],
-      [2, { articleId: 2, category: '국내 산업', headline: 'h2', bullets: [], background: null, isReference: false }],
+      [1, { articleId: 1, category: 'Global', headline: 'h1', bullets: [], background: null, isReference: false, isRelevant: true }],
+      [2, { articleId: 2, category: '국내 산업', headline: 'h2', bullets: [], background: null, isReference: false, isRelevant: true }],
     ]);
 
     const sections = buildReportSections(candidates, deep);

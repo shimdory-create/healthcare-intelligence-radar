@@ -99,6 +99,13 @@ export function buildReportSections(
     // from the report; it's still visible in the regular digest below.
     if (!deep) continue;
 
+    // the multi-outlet promotion path (getReportCandidates' outlet-count rule) has no
+    // relevance check of its own -- a job posting or an individual's award can clear "3+
+    // outlets" without having any business relevance at all. isRelevant is Gemini's judgment
+    // from the full article text (the most accurate point to check), applied to the 'high'
+    // path too as a second check on top of analyzeArticles' 1차 classification.
+    if (!deep.isRelevant) continue;
+
     const outletNote = candidate.isMultiOutlet
       ? `${candidate.outletCount}개 매체 보도 (${candidate.outletSourceIds.map(sourceDisplayName).join(', ')})`
       : null;
