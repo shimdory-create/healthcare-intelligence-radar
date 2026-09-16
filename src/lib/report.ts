@@ -147,6 +147,10 @@ const SINGLE_LINE_SPACING = { line: 240, lineRule: LineRuleType.AUTO };
 const TITLE_SIZE = 44;
 const BODY_SIZE = 28;
 const NOTE_SIZE = 20;
+// "※ " background/context line: 12pt (24 half-points), distinct from the 10pt "* " glossary
+// note -- the user wants it slightly more readable than a glossary note but still smaller
+// than body text.
+const BACKGROUND_SIZE = 24;
 
 // A slight (-0.5pt per character) global tightening applied to headline/bullet/note text --
 // docx's characterSpacing is in twips (1/20 pt), so -10 = -0.5pt. This is "방법 1" from the
@@ -204,10 +208,13 @@ function notePara(text: string): Paragraph {
 function backgroundPara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: `※ ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+      new TextRun({ text: `※ ${text}`, size: BACKGROUND_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
     ],
     spacing: { before: 40, after: 60, ...LINE_SPACING },
-    indent: { left: 460, hanging: 260 },
+    // plain 2-character indent (480 twips = 2 * 12pt-em), not a hanging indent -- "※" is just
+    // the first two characters of the line, not a marker needing wrapped lines realigned
+    // after it the way □/-/· do.
+    indent: { left: 480 },
   });
 }
 
