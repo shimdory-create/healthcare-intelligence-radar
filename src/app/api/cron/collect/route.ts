@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
     } else {
       try {
         const candidates = await getCandidatesForReport(reportDates);
-        const deepResults = await analyzeCandidatesDeep(candidates, reportDeadline);
+        const { results: deepResults, skipped } = await analyzeCandidatesDeep(candidates, reportDeadline);
 
         if (Date.now() >= reportDeadline) {
           // Time budget ran out during analyzeCandidatesDeep (it returned early/empty) --
@@ -152,7 +152,20 @@ export async function GET(req: NextRequest) {
           const sections = buildReportSections(candidates, deepResults);
           reportDocxBuffer = await buildReportDocx(sections, formatReportDate(collectedDate), '헬스케어사업팀');
           reportHtml = buildReportEmailHtml(sections, formatReportDate(collectedDate));
-          report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}`;
+
+          // surfaces WHY a candidate isn't in the report, right in this response, instead of
+          // needing a fresh temporary diagnostic route every time one goes missing -- see
+          // DeepAnalysisSkipReason's doc comment for what each skip reason means, and
+          // report.ts's isRelevant check for why a deep-analyzed candidate can still be
+          // excluded (a real result, just judged to have no business relevance).
+          const excludedIrrelevant = candidates.filter(
+            (c) => deepResults.has(c.id) && !deepResults.get(c.id)!.isRelevant,
+          ).length;
+          const skipCounts = skipped.reduce<Record<string, number>>((acc, s) => {
+            acc[s.reason] = (acc[s.reason] ?? 0) + 1;
+            return acc;
+          }, {});
+          report = `sections ${sections.length}, deep-analyzed ${deepResults.size}/${candidates.length}, excluded-irrelevant ${excludedIrrelevant}, skipped ${JSON.stringify(skipCounts)}`;
         }
       } catch (err) {
         report = `error: ${err instanceof Error ? err.message : String(err)}`;

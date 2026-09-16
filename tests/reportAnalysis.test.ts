@@ -39,9 +39,9 @@ describe('analyzeCandidatesDeep', () => {
       isRelevant: true,
     });
 
-    const result = await analyzeCandidatesDeep([makeCandidate({ id: 5 })]);
+    const { results, skipped } = await analyzeCandidatesDeep([makeCandidate({ id: 5 })]);
 
-    expect(result.get(5)).toEqual({
+    expect(results.get(5)).toEqual({
       articleId: 5,
       category: '국내 산업',
       headline: '요약 헤드라인',
@@ -50,32 +50,35 @@ describe('analyzeCandidatesDeep', () => {
       isReference: false,
       isRelevant: true,
     });
+    expect(skipped).toEqual([]);
   });
 
-  it('omits a candidate whose article text could not be extracted, without throwing', async () => {
+  it('omits a candidate whose article text could not be extracted, and records why', async () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue(null);
 
-    const result = await analyzeCandidatesDeep([makeCandidate({ id: 6 })]);
+    const { results, skipped } = await analyzeCandidatesDeep([makeCandidate({ id: 6 })]);
 
-    expect(result.has(6)).toBe(false);
+    expect(results.has(6)).toBe(false);
     expect(analyzeDeep).not.toHaveBeenCalled();
+    expect(skipped).toEqual([{ articleId: 6, reason: 'extract-failed' }]);
   });
 
-  it('omits a candidate whose Gemini call fails, without throwing or affecting others', async () => {
+  it('omits a candidate whose Gemini call fails, records why, without affecting others', async () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue('본문');
     analyzeDeep
       .mockRejectedValueOnce(new Error('quota exceeded'))
       .mockResolvedValueOnce({ category: 'Global', headline: 'h', bullets: [], background: null, isReference: false, isRelevant: true });
 
-    const result = await analyzeCandidatesDeep([makeCandidate({ id: 7 }), makeCandidate({ id: 8 })]);
+    const { results, skipped } = await analyzeCandidatesDeep([makeCandidate({ id: 7 }), makeCandidate({ id: 8 })]);
 
-    expect(result.has(7)).toBe(false);
-    expect(result.get(8)?.category).toBe('Global');
+    expect(results.has(7)).toBe(false);
+    expect(results.get(8)?.category).toBe('Global');
+    expect(skipped).toEqual([{ articleId: 7, reason: 'gemini-failed' }]);
   });
 
-  it('stops before the deadline and leaves the rest for the fallback path', async () => {
+  it('stops before the deadline and records every remaining candidate as skipped for that reason', async () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue('본문');
     analyzeDeep.mockResolvedValue({ category: '국내 산업', headline: 'h', bullets: [], background: null, isReference: false, isRelevant: true });
@@ -85,13 +88,14 @@ describe('analyzeCandidatesDeep', () => {
       return call <= 1 ? 1_000 : 2_000;
     });
 
-    const result = await analyzeCandidatesDeep(
+    const { results, skipped } = await analyzeCandidatesDeep(
       [makeCandidate({ id: 1 }), makeCandidate({ id: 2 })],
       1_500,
     );
 
     expect(analyzeDeep).toHaveBeenCalledTimes(1);
-    expect(result.size).toBe(1);
+    expect(results.size).toBe(1);
+    expect(skipped).toEqual([{ articleId: 2, reason: 'deadline' }]);
     vi.restoreAllMocks();
   });
 });
