@@ -70,4 +70,45 @@ describe('extractArticleText', () => {
     const text = await extractArticleText('https://example.com/huge');
     expect(text).toBeNull();
   });
+
+  it('falls back to the embedded Fusion.globalContent blob when the static HTML has no article body', async () => {
+    // Arc Publishing/Fusion CMS sites (e.g. chosun.com) render the article entirely
+    // client-side -- the server HTML has no <p> tags at all, just this one JSON blob.
+    const longParagraph = '이것은 위고비 임상 결과에 대한 긴 문단입니다. '.repeat(4);
+    const globalContent = {
+      content_elements: [
+        { type: 'image', content: undefined },
+        { type: 'text', content: `<p>${longParagraph}</p>` },
+        { type: 'text', content: '두 번째 문단도 충분히 길게 작성해서 최소 길이 기준을 넘기도록 합니다.' },
+      ],
+    };
+    const html = `<html><body><div id="fusion-app"></div><script id="fusion-metadata">window.Fusion={};Fusion.globalContent=${JSON.stringify(globalContent)};Fusion.contextPath="/pf";</script></body></html>`;
+    mockFetchHtml(html);
+
+    const text = await extractArticleText('https://www.chosun.com/economy/science/1/');
+
+    expect(text).toContain('위고비 임상 결과');
+    expect(text).toContain('두 번째 문단');
+    expect(text).not.toContain('<p>');
+  });
+
+  it('strips <style> blocks before parsing, without affecting the extracted text', async () => {
+    // jsdom's cssom parser logs ("Could not parse CSS stylesheet") on some real-world <style>
+    // content it can't handle (seen live on kormedi.com) -- stripping style blocks first is a
+    // free simplification since Readability never needs CSS to find the article text.
+    const html = `
+      <html><head><style>:root { --weird: attr(data-x); } .a::before { content: "•"; }</style></head>
+      <body>
+        <article>
+          <p>이것은 본문 첫 문단입니다. 충분히 길게 작성해서 Readability가 본문으로 인식하도록 합니다.</p>
+          <p>이것은 본문 두 번째 문단입니다. 마찬가지로 내용을 채워 넣어서 기사 판별에 필요한 최소 길이를 넘깁니다.</p>
+        </article>
+      </body></html>
+    `;
+    mockFetchHtml(html);
+
+    const text = await extractArticleText('https://kormedi.com/article/1');
+
+    expect(text).toContain('본문 첫 문단');
+  });
 });

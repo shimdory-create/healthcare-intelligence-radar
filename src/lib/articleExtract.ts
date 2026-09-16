@@ -12,10 +12,74 @@ const USER_AGENT =
 // full DOM by JSDOM). 5MB comfortably covers any real article page.
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 
+// a >100 floor (not >0) distinguishes "no real article" from a trivially short but
+// technically present body -- shared by both extraction strategies below.
+const MIN_ARTICLE_LENGTH = 100;
+
+/** extracts every content_elements[].content of type "text" from an Arc Publishing/Fusion
+ *  CMS page's embedded `Fusion.globalContent = {...}` state blob (chosun.com and other Arc
+ *  sites render their article body entirely client-side -- the static HTML Readability sees
+ *  has no <p> tags at all, just this one JSON blob with the real content). Scans for the
+ *  matching closing brace by hand (tracking string/escape state) rather than a regex, since
+ *  the JSON itself can contain semicolons or nested braces that would confuse a delimiter
+ *  search. Returns null if the marker is absent, malformed, or too short to be a real article. */
+function extractFusionArticleText(html: string): string | null {
+  const marker = 'Fusion.globalContent=';
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) return null;
+
+  const braceStart = markerIdx + marker.length;
+  if (html[braceStart] !== '{') return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let end = -1;
+  for (let i = braceStart; i < html.length; i++) {
+    const ch = html[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end === -1) return null;
+
+  try {
+    const data = JSON.parse(html.slice(braceStart, end));
+    const elements = data?.content_elements;
+    if (!Array.isArray(elements)) return null;
+
+    const text = elements
+      .filter((el: unknown): el is { type: string; content: string } => {
+        const e = el as { type?: unknown; content?: unknown };
+        return e?.type === 'text' && typeof e.content === 'string';
+      })
+      .map((el) => el.content.replace(/<[^>]+>/g, ''))
+      .join('\n')
+      .trim();
+    return text.length > MIN_ARTICLE_LENGTH ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 /** fetches `url` and extracts its main article text with Readability (the same engine
  *  behind Firefox Reader Mode) -- far more robust across 24 different outlet HTML
- *  structures than hand-rolled tag stripping. Never throws: any failure (network, no
- *  extractable content, malformed HTML) resolves to null so callers can fall back. */
+ *  structures than hand-rolled tag stripping. Falls back to extractFusionArticleText for
+ *  Arc/Fusion CMS pages (see its own doc comment) whose article body isn't in the static
+ *  HTML at all. Never throws: any failure (network, no extractable content, malformed HTML)
+ *  resolves to null so callers can fall back. */
 export async function extractArticleText(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
@@ -30,15 +94,18 @@ export async function extractArticleText(url: string): Promise<string | null> {
     let html = await res.text();
     if (html.length > MAX_RESPONSE_BYTES) html = html.slice(0, MAX_RESPONSE_BYTES);
 
+    // Some outlets' inline <style> blocks contain CSS jsdom's cssom parser can't handle (seen
+    // live on kormedi.com -- it logs "Could not parse CSS stylesheet" via its virtualConsole).
+    // Readability never needs CSS to find the article text, so stripping style blocks before
+    // parsing is a free, safe simplification regardless of source.
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+
     const dom = new JSDOM(html, { url });
     const article = new Readability(dom.window.document).parse();
-    if (!article?.textContent) return null;
+    const readabilityText = article?.textContent?.trim();
+    if (readabilityText && readabilityText.length > MIN_ARTICLE_LENGTH) return readabilityText;
 
-    const text = article.textContent.trim();
-    // Readability can return a short non-null textContent (a couple of characters) for
-    // pages with no real article body -- a >100 floor (not >0) distinguishes "no article"
-    // from a trivially short but technically present body.
-    return text.length > 100 ? text : null;
+    return extractFusionArticleText(html);
   } catch {
     return null;
   }

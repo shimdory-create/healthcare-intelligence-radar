@@ -137,6 +137,74 @@ describe('fetchSourceArticles', () => {
     expect(options.headers['User-Agent']).toMatch(/Mozilla/);
   });
 
+  it('resolves a site-relative link against the feed\'s own origin', async () => {
+    const RELATIVE_LINK_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Sample Feed</title>
+  <item>
+    <title>진흥원, 보도자료 발표</title>
+    <link>/board/view?pageNum=1&amp;rowCnt=10&amp;linkId=123&amp;menuId=MENU00100</link>
+    <pubDate>Thu, 3 Sep 2026 09:00:00 +0900</pubDate>
+    <description>보도자료 내용.</description>
+  </item>
+</channel></rss>`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => RELATIVE_LINK_RSS,
+      }),
+    );
+
+    const source: SourceConfig = {
+      id: 'khidi',
+      name: '한국보건산업진흥원',
+      rssUrl: 'https://www.khidi.or.kr/rss?menuId=MENU00100',
+      tier: 1,
+      reliability: 'stable',
+      fetchMethod: 'rss',
+    };
+
+    const articles = await fetchSourceArticles(source);
+    expect(articles).toHaveLength(1);
+    expect(articles[0].url).toBe('https://www.khidi.or.kr/board/view?pageNum=1&rowCnt=10&linkId=123&menuId=MENU00100');
+  });
+
+  it('skips an item whose relative link cannot be resolved against the feed origin', async () => {
+    const BAD_RELATIVE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Sample Feed</title>
+  <item>
+    <title>깨진 링크</title>
+    <link>not a url at all</link>
+    <pubDate>Thu, 3 Sep 2026 09:00:00 +0900</pubDate>
+    <description>본문.</description>
+  </item>
+</channel></rss>`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => BAD_RELATIVE_RSS,
+      }),
+    );
+
+    const source: SourceConfig = {
+      id: 'test-source',
+      name: 'Test Source',
+      // rssUrl itself has no valid base to resolve "not a url at all" against
+      rssUrl: 'not-a-valid-base',
+      tier: 1,
+      reliability: 'stable',
+      fetchMethod: 'rss',
+    };
+
+    const articles = await fetchSourceArticles(source);
+    expect(articles).toHaveLength(0);
+  });
+
   it('throws when the HTTP response is not ok', async () => {
     vi.stubGlobal(
       'fetch',
@@ -170,6 +238,18 @@ describe('resolveGoogleNewsUrl', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockRejectedValue(new Error('network error')),
+    );
+    const resolved = await resolveGoogleNewsUrl('https://news.google.com/rss/articles/abc');
+    expect(resolved).toBeNull();
+  });
+
+  it('returns null when the "resolved" URL is still on news.google.com', async () => {
+    // Google News sometimes chains through a second news.google.com URL rather than landing
+    // on the real publisher page (that final hop needs client-side JS) -- accepting it would
+    // store an article whose text can never be extracted later.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, url: 'https://news.google.com/rss/articles/def' }),
     );
     const resolved = await resolveGoogleNewsUrl('https://news.google.com/rss/articles/abc');
     expect(resolved).toBeNull();

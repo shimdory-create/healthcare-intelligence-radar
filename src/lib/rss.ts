@@ -71,6 +71,15 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
       const resolved = await resolveGoogleNewsUrl(item.link);
       if (!resolved) continue; // skip this one item, never abort the whole source
       url = resolved;
+    } else if (!/^https?:\/\//i.test(url)) {
+      // some feeds (e.g. khidi) publish a site-relative <link> ("/board/view?...") rather
+      // than a full URL -- resolve it against the feed's own origin instead of dropping the
+      // item outright (collect.ts's absolute-URL guard would otherwise skip every single one).
+      try {
+        url = new URL(url, source.rssUrl).href;
+      } catch {
+        continue;
+      }
     }
 
     results.push({
@@ -87,8 +96,13 @@ export async function resolveGoogleNewsUrl(redirectUrl: string): Promise<string 
   try {
     const res = await fetch(redirectUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
-    if (res.url && res.url !== redirectUrl) return res.url;
-    return null;
+    if (!res.url || res.url === redirectUrl) return null;
+    // Google News sometimes chains through more than one news.google.com URL before giving
+    // up and requiring client-side JS to reach the real publisher page -- accepting one of
+    // those intermediate URLs as "resolved" stores an article whose text can never be
+    // extracted later. Only accept a result that actually left google's domain.
+    if (new URL(res.url).hostname === 'news.google.com') return null;
+    return res.url;
   } catch {
     return null;
   }
