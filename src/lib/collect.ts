@@ -11,6 +11,13 @@ export interface CollectionSummary {
   inserted: number;
   skippedDuplicate: number;
   skippedNoTagMatch: number;
+  /** fetchSourceArticles already resolves relative links and rejects unresolved Google News
+   *  redirects, so this should normally stay 0 -- it's a last-resort net, not the primary
+   *  guard. A nonzero count here for a source that used to read 0 is exactly the shape of bug
+   *  this field exists to catch: khidi's relative-URL feed silently lost 100% of its articles
+   *  to this same guard for two weeks (fixed 2026-09-16) with no counter distinguishing it
+   *  from normal dedup/tag skips -- see [[project-article-extraction-reliability]]. */
+  skippedInvalidUrl: number;
   error: string | null;
 }
 
@@ -21,6 +28,7 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
     inserted: 0,
     skippedDuplicate: 0,
     skippedNoTagMatch: 0,
+    skippedInvalidUrl: 0,
     error: null,
   };
 
@@ -30,6 +38,7 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
 
     for (const a of articles) {
       if (!/^https?:\/\//i.test(a.url)) {
+        summary.skippedInvalidUrl++;
         continue;
       }
 
@@ -90,6 +99,7 @@ function collectSourceWithBudget(source: SourceConfig): Promise<CollectionSummar
           inserted: 0,
           skippedDuplicate: 0,
           skippedNoTagMatch: 0,
+          skippedInvalidUrl: 0,
           error: 'source budget exceeded',
         }),
       SOURCE_BUDGET_MS,

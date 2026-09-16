@@ -86,3 +86,24 @@ describe('collectSource tier-aware tag filtering', () => {
     expect(summary.skippedNoTagMatch).toBe(1);
   });
 });
+
+describe('collectSource invalid-URL visibility', () => {
+  it('counts a non-absolute URL as skippedInvalidUrl instead of silently disappearing', async () => {
+    // fetchSourceArticles (rss.ts) already resolves relative links and rejects unresolved
+    // Google News redirects, so this guard should rarely fire in practice -- but when it
+    // does (a malformed feed, a future source with the same shape of bug khidi had), it must
+    // show up as its own counted bucket, not vanish with no trace the way khidi's did for
+    // two weeks before this counter existed.
+    const { collectSource } = await import('@/lib/collect');
+    fetchSourceArticles.mockResolvedValue([
+      { title: '정상 기사', url: 'https://example.com/ok', snippet: 'GLP-1 비만치료제' },
+      { title: '깨진 링크 기사', url: '/board/view?id=1', snippet: 'GLP-1 비만치료제' },
+    ]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.fetched).toBe(2);
+    expect(summary.inserted).toBe(1);
+    expect(summary.skippedInvalidUrl).toBe(1);
+  });
+});
