@@ -92,7 +92,14 @@ export async function extractArticleText(url: string): Promise<string | null> {
     if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) return null;
 
     let html = await res.text();
-    if (html.length > MAX_RESPONSE_BYTES) html = html.slice(0, MAX_RESPONSE_BYTES);
+    // html.length counts UTF-16 code units, not bytes -- for a Korean-heavy page (3 bytes/char
+    // in UTF-8, 1 code unit in a JS string) that undercounts by up to 3x, so a page with no
+    // Content-Length header (the only other guard, above) could pass this check while still
+    // being several times MAX_RESPONSE_BYTES on the wire. Buffer.byteLength measures the real
+    // UTF-8 size; truncating via Buffer (not the JS string directly) keeps the cut accurate.
+    if (Buffer.byteLength(html, 'utf8') > MAX_RESPONSE_BYTES) {
+      html = Buffer.from(html, 'utf8').subarray(0, MAX_RESPONSE_BYTES).toString('utf8');
+    }
 
     // Some outlets' inline <style> blocks contain CSS jsdom's cssom parser can't handle (seen
     // live on kormedi.com -- it logs "Could not parse CSS stylesheet" via its virtualConsole).

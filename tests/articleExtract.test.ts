@@ -65,6 +65,19 @@ describe('extractArticleText', () => {
     expect(options.headers['User-Agent']).toMatch(/Mozilla/);
   });
 
+  it('truncates by real UTF-8 byte size, not JS string length, for a Korean-heavy page with no Content-Length', async () => {
+    // Korean characters are 3 bytes each in UTF-8 but 1 UTF-16 code unit each in a JS string
+    // -- a naive `html.length > MAX_RESPONSE_BYTES` check undercounts by up to 3x and would
+    // never trigger here, letting content past the intended 5MB cap reach Readability/JSDOM.
+    const filler = '가나다라마바사아자차카타파하'.repeat(200_000); // ~2.8M chars, ~8.4MB in UTF-8
+    const html = `<html><body><article><p>${filler}</p><p id="marker">추적마커발견됨: 이 문단은 5MB 경계 이후에 위치합니다.</p></article></body></html>`;
+    mockFetchHtml(html);
+
+    const text = await extractArticleText('https://example.com/huge-korean-article');
+
+    expect(text).not.toContain('추적마커발견됨');
+  });
+
   it('returns null without fetching the body when Content-Length exceeds the size guard', async () => {
     mockFetchHtml('<html><body><article><p>본문</p></article></body></html>', true, String(10 * 1024 * 1024));
     const text = await extractArticleText('https://example.com/huge');
