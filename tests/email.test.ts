@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDigestHtml } from '@/lib/email';
 import type { ArticleRow, PriorityCounts, AiAnalysis, DuplicateRef } from '@/lib/db';
 
-const COUNTS: PriorityCounts = { total: 2, high: 1, medium: 1, low: 0 };
+const COUNTS: PriorityCounts = { total: 2, high: 1, medium: 1, low: 0, aiAnalyzed: 2 };
 
 function makeArticle(overrides: Partial<ArticleRow>): ArticleRow {
   return {

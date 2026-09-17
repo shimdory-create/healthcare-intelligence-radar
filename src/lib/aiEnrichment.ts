@@ -14,6 +14,14 @@ export interface EnrichmentResult {
   /** true when `deadlineMs` was reached before every article could be analyzed -- the
    *  remaining articles simply keep their rule-based priority, same as when AI is unconfigured. */
   stoppedEarly: boolean;
+  /** number of batches whose Gemini call (or response parsing) threw. Found live 2026-09-17:
+   *  a single bad batch used to reject the whole enrichArticles() call, discarding every
+   *  batch after it for the day even though plenty of time budget remained -- one day's
+   *  20-article run stopped cold right where a 3rd batch would have started, instead of the
+   *  ~80-100 articles the remaining time budget could have covered. Each batch is now
+   *  isolated so one failure only costs that batch's 10 articles (left on their rule-based
+   *  priority), not the rest of the day. */
+  failedBatches: number;
 }
 
 /** analyzes every article in `articles` with Gemini (in batches), reusing cached results for
@@ -27,10 +35,10 @@ export interface EnrichmentResult {
  *  a single slow-but-not-erroring Gemini batch must never eat the whole remaining budget. */
 export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number): Promise<EnrichmentResult> {
   if (process.env.FREE_ONLY !== 'true') {
-    return { analyzed: 0, cached: 0, skipped: 'FREE_ONLY is not set to true', stoppedEarly: false };
+    return { analyzed: 0, cached: 0, skipped: 'FREE_ONLY is not set to true', stoppedEarly: false, failedBatches: 0 };
   }
   if (!process.env.GEMINI_API_KEY) {
-    return { analyzed: 0, cached: 0, skipped: 'GEMINI_API_KEY is not set', stoppedEarly: false };
+    return { analyzed: 0, cached: 0, skipped: 'GEMINI_API_KEY is not set', stoppedEarly: false, failedBatches: 0 };
   }
 
   const existingByArticleId = new Map(
@@ -55,12 +63,13 @@ export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number
     toAnalyze.push({ id: a.id, title: a.title, snippet: a.snippet ?? '', hash });
   }
 
-  if (toAnalyze.length === 0) return { analyzed: 0, cached, skipped: null, stoppedEarly: false };
+  if (toAnalyze.length === 0) return { analyzed: 0, cached, skipped: null, stoppedEarly: false, failedBatches: 0 };
 
   const model = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash-lite';
   const hashById = new Map(toAnalyze.map((a) => [a.id, a.hash]));
   let analyzed = 0;
   let stoppedEarly = false;
+  let failedBatches = 0;
 
   for (let i = 0; i < toAnalyze.length; i += BATCH_SIZE) {
     if (deadlineMs !== undefined && Date.now() >= deadlineMs) {
@@ -69,7 +78,16 @@ export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number
     }
 
     const chunk = toAnalyze.slice(i, i + BATCH_SIZE);
-    const results = await analyzeArticles(chunk.map((a) => ({ id: a.id, title: a.title, snippet: a.snippet })));
+    // isolated per batch -- a transient Gemini failure (quota blip, malformed response) on
+    // one batch must not cost every batch after it; skip just this batch's articles (they
+    // keep their rule-based priority for today) and keep going.
+    let results;
+    try {
+      results = await analyzeArticles(chunk.map((a) => ({ id: a.id, title: a.title, snippet: a.snippet })));
+    } catch {
+      failedBatches++;
+      continue;
+    }
 
     for (const r of results) {
       const hash = hashById.get(r.articleId);
@@ -88,5 +106,5 @@ export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number
     }
   }
 
-  return { analyzed, cached, skipped: null, stoppedEarly };
+  return { analyzed, cached, skipped: null, stoppedEarly, failedBatches };
 }

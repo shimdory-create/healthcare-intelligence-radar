@@ -347,6 +347,12 @@ export interface PriorityCounts {
   high: number;
   medium: number;
   low: number;
+  /** count of articles with an ai_analysis row -- i.e. actually judged by Gemini, not just
+   *  carrying the rule-based keyword-score priority. Low most days by design (enrichArticles
+   *  skips already-rule-based-'low' articles entirely, see aiEnrichment.ts), but a low count
+   *  among medium/high articles usually means the AI enrichment phase hit its time budget or
+   *  a batch failure -- check the cron route's `ai` response field for which. */
+  aiAnalyzed: number;
 }
 
 /** counts by priority band for a given collected date (KST), or across all time if omitted --
@@ -362,11 +368,14 @@ export async function getPriorityCounts(collectedDate?: string): Promise<Priorit
       count(*)::int as total,
       count(*) filter (where a.priority = 'high')::int as high,
       count(*) filter (where a.priority = 'medium')::int as medium,
-      count(*) filter (where a.priority = 'low')::int as low
+      count(*) filter (where a.priority = 'low')::int as low,
+      count(*) filter (where aa.article_id is not null)::int as ai_analyzed
     from articles a
+    left join ai_analysis aa on aa.article_id = a.id
     ${where}
   `;
-  return rows[0] as PriorityCounts;
+  const r = rows[0] as { total: number; high: number; medium: number; low: number; ai_analyzed: number };
+  return { total: r.total, high: r.high, medium: r.medium, low: r.low, aiAnalyzed: r.ai_analyzed };
 }
 
 export async function getAppSetting(key: string): Promise<string | null> {

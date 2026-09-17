@@ -110,7 +110,8 @@ export async function GET(req: NextRequest) {
     const aiDeadline = routeStart + maxDuration * 1000 - AI_RESERVE_MS;
     ai = await enrichArticles(preAiArticles, aiDeadline)
       .then((r) => {
-        const base = r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`;
+        let base = r.skipped ?? `analyzed ${r.analyzed}, cached ${r.cached}`;
+        if (r.failedBatches > 0) base += `, failed-batches ${r.failedBatches}`;
         return r.stoppedEarly ? `${base} (stopped early: time budget)` : base;
       })
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);

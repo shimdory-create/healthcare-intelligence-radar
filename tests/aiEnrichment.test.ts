@@ -81,7 +81,7 @@ describe('enrichArticles', () => {
       expect.objectContaining({ articleId: 2, contentHash: 'hash:B:b', priority: 'high' }),
     );
     expect(updateArticlePriority).toHaveBeenCalledWith(2, 'high');
-    expect(result).toEqual({ analyzed: 1, cached: 1, skipped: null, stoppedEarly: false });
+    expect(result).toEqual({ analyzed: 1, cached: 1, skipped: null, stoppedEarly: false, failedBatches: 0 });
   });
 
   it('analyzes every article, batching into chunks of 10 across multiple Gemini calls', async () => {
@@ -100,11 +100,50 @@ describe('enrichArticles', () => {
     expect(secondChunk).toHaveLength(2);
   });
 
-  it('propagates a Gemini failure -- the cron route catches it, not this function', async () => {
+  it('isolates a failed batch instead of aborting every batch after it', async () => {
+    // found live 2026-09-17: one bad batch used to reject the whole enrichArticles() call,
+    // discarding every later batch for the day even with plenty of time budget left (a
+    // 20-article run stopped cold right where a 3rd batch would have started). Each batch
+    // must now be independent -- a failure costs only that batch's articles.
     const { enrichArticles } = await import('@/lib/aiEnrichment');
-    analyzeArticles.mockRejectedValue(new Error('quota exceeded'));
+    const articles = Array.from({ length: 20 }, (_, i) => makeArticle({ id: i + 1, title: `T${i}`, snippet: `s${i}` }));
+    analyzeArticles
+      .mockResolvedValueOnce(
+        Array.from({ length: 10 }, (_, i) => ({
+          articleId: i + 1,
+          priority: 'medium' as const,
+          summary: 's',
+          implications: [],
+          watchPoint: '',
+        })),
+      )
+      .mockRejectedValueOnce(new Error('quota exceeded'));
 
-    await expect(enrichArticles([makeArticle({ id: 1 })])).rejects.toThrow('quota exceeded');
+    const result = await enrichArticles(articles);
+
+    expect(analyzeArticles).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ analyzed: 10, cached: 0, skipped: null, stoppedEarly: false, failedBatches: 1 });
+  });
+
+  it('keeps processing later batches after a failed one', async () => {
+    const { enrichArticles } = await import('@/lib/aiEnrichment');
+    const articles = Array.from({ length: 20 }, (_, i) => makeArticle({ id: i + 1, title: `T${i}`, snippet: `s${i}` }));
+    analyzeArticles
+      .mockRejectedValueOnce(new Error('quota exceeded'))
+      .mockResolvedValueOnce(
+        Array.from({ length: 10 }, (_, i) => ({
+          articleId: i + 11,
+          priority: 'medium' as const,
+          summary: 's',
+          implications: [],
+          watchPoint: '',
+        })),
+      );
+
+    const result = await enrichArticles(articles);
+
+    expect(analyzeArticles).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ analyzed: 10, cached: 0, skipped: null, stoppedEarly: false, failedBatches: 1 });
   });
 
   it('stops before the deadline and leaves the rest for the rule-based fallback, without erroring', async () => {
@@ -133,7 +172,7 @@ describe('enrichArticles', () => {
     const result = await enrichArticles(articles, 1_500);
 
     expect(analyzeArticles).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ analyzed: 10, cached: 0, skipped: null, stoppedEarly: true });
+    expect(result).toEqual({ analyzed: 10, cached: 0, skipped: null, stoppedEarly: true, failedBatches: 0 });
 
     Date.now = realDateNow;
   });
@@ -162,7 +201,7 @@ describe('enrichArticles', () => {
 
     expect(analyzeArticles).toHaveBeenCalledTimes(1);
     expect(analyzeArticles).toHaveBeenCalledWith([{ id: 2, title: 'B', snippet: 'b' }]);
-    expect(result).toEqual({ analyzed: 1, cached: 0, skipped: null, stoppedEarly: false });
+    expect(result).toEqual({ analyzed: 1, cached: 0, skipped: null, stoppedEarly: false, failedBatches: 0 });
   });
 
   it('skips Gemini entirely and reports skipped when every article is already low', async () => {
@@ -173,6 +212,6 @@ describe('enrichArticles', () => {
     const result = await enrichArticles(articles);
 
     expect(analyzeArticles).not.toHaveBeenCalled();
-    expect(result).toEqual({ analyzed: 0, cached: 0, skipped: null, stoppedEarly: false });
+    expect(result).toEqual({ analyzed: 0, cached: 0, skipped: null, stoppedEarly: false, failedBatches: 0 });
   });
 });

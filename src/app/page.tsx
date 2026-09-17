@@ -90,7 +90,7 @@ export default async function HomePage({
       </Link>
       <p className="text-muted-foreground mt-1 mb-1 text-sm">보도자료/뉴스 센싱 대시보드</p>
       <p className="text-muted-foreground mb-4 text-xs">
-        {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low})
+        {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low}) · 🤖 AI 분석완료 {counts.aiAnalyzed}건
       </p>
       <FilterBar
         tier={tier}
