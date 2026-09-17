@@ -81,6 +81,7 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: '사노피, 독감백신 전국 공급 개시',
+        headline_note: '',
         bullets: [
           { text: '9월 8일부터 전국 공급 개시', note: '', sub_bullets: ['표준용량 대비 항원 4배'] },
         ],
@@ -95,11 +96,31 @@ describe('analyzeDeep', () => {
     expect(result).toEqual({
       category: '국내 산업',
       headline: '사노피, 독감백신 전국 공급 개시',
+      headlineNote: null,
       bullets: [{ text: '9월 8일부터 전국 공급 개시', note: null, subBullets: ['표준용량 대비 항원 4배'] }],
       background: null,
       isReference: false,
       isRelevant: true,
     });
+  });
+
+  it('carries a headline-level note through when a term appears only in the headline', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 산업',
+        headline: '카카오페이, 스테이블코인 기반 AI 에이전트 결제 PoC 완료',
+        headline_note: 'PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인',
+        bullets: [{ text: '이용자가 정한 결제 한도 내에서 AI 에이전트가 결제 여부 판단', note: '', sub_bullets: [] }],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('카카오페이 PoC 완료', '본문');
+
+    expect(result.headlineNote).toBe('PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인');
   });
 
   it('carries isRelevant=false through when Gemini judges the article has no business relevance', async () => {

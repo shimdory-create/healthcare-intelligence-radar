@@ -33,6 +33,7 @@ describe('analyzeCandidatesDeep', () => {
     analyzeDeep.mockResolvedValue({
       category: '국내 산업',
       headline: '요약 헤드라인',
+      headlineNote: null,
       bullets: [{ text: 't', note: null, subBullets: [] }],
       background: null,
       isReference: false,
@@ -45,6 +46,7 @@ describe('analyzeCandidatesDeep', () => {
       articleId: 5,
       category: '국내 산업',
       headline: '요약 헤드라인',
+      headlineNote: null,
       bullets: [{ text: 't', note: null, subBullets: [] }],
       background: null,
       isReference: false,

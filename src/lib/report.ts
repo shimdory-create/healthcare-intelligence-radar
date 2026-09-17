@@ -14,6 +14,10 @@ export interface ReportBullet {
 
 export interface ReportItem {
   headline: string;
+  /** term-glossary note for a word in the headline itself (not covered by any bullet's own
+   *  note) -- rendered directly under the headline, before outletNote/bullets. Null when
+   *  nothing in the headline needs explaining. */
+  headlineNote: string | null;
   /** the "N개 매체 보도 (매체1, 매체2, ...)" line for multi-outlet items -- distinct from a
    *  bullet's own term-glossary `note`; computed from the candidate's duplicate-group data,
    *  not from Gemini. Null for single-outlet items. */
@@ -52,6 +56,9 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
     .map((section, i) => {
       const itemsHtml = section.items
         .map((item) => {
+          const headlineNoteHtml = item.headlineNote
+            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.headlineNote)}</p>`
+            : '';
           const outletNoteHtml = item.outletNote
             ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.outletNote)}</p>`
             : '';
@@ -70,7 +77,7 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
             ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
             : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -114,6 +121,7 @@ export function buildReportSections(
 
     byName.get(sectionName)!.push({
       headline: deep.headline,
+      headlineNote: deep.headlineNote,
       outletNote,
       bullets: deep.bullets,
       background: deep.background,
@@ -261,6 +269,7 @@ export async function buildReportDocx(
     children.push(sectionHeadingPara(`${sectionIndex + 1}. ${section.title}`));
     for (const item of section.items) {
       children.push(headlinePara(item.isReference ? `(참고) ${item.headline}` : item.headline));
+      if (item.headlineNote) children.push(notePara(item.headlineNote));
       if (item.outletNote) children.push(notePara(item.outletNote));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));

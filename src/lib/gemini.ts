@@ -131,6 +131,11 @@ export interface DeepAnalysisResult {
   /** report-style headline, rewritten by Gemini rather than reusing the source article's own
    *  (news-style) title -- see buildDeepPrompt's headline rules. */
   headline: string;
+  /** term-glossary note for a word that appears in the headline itself but not in any bullet
+   *  (e.g. "PoC", "소송금융") -- without this, such a term never gets explained anywhere,
+   *  since a bullet's own note is restricted to terms literally present in that bullet's
+   *  text. Same whitelist/no-fabrication rules as a bullet's note. Null when nothing applies. */
+  headlineNote: string | null;
   /** each bullet carries its own optional term-glossary note (rendered directly under that
    *  bullet, not off in a fixed slot under the headline) so a note always sits next to the
    *  term it's explaining, whichever bullet that happens to be. */
@@ -159,6 +164,7 @@ const DEEP_RESPONSE_SCHEMA = {
   properties: {
     category: { type: 'string', enum: ['국내 보험·제도', '국내 산업', 'Global'] },
     headline: { type: 'string' },
+    headline_note: { type: 'string' },
     bullets: {
       type: 'array',
       maxItems: 2,
@@ -176,7 +182,7 @@ const DEEP_RESPONSE_SCHEMA = {
     is_reference: { type: 'boolean' },
     is_relevant: { type: 'boolean' },
   },
-  required: ['category', 'headline', 'bullets', 'background', 'is_reference', 'is_relevant'],
+  required: ['category', 'headline', 'headline_note', 'bullets', 'background', 'is_reference', 'is_relevant'],
 };
 
 function buildDeepPrompt(title: string, fullText: string): string {
@@ -216,6 +222,7 @@ ${fullText.slice(0, 6000)}
   - "국내 산업": 국내 제약사·의료기기·헬스케어 기업의 사업 활동
   - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
 - headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제"). **bullets[0]의 text를 단어만 바꿔 반복하지 말 것** -- headline은 "무엇이 있었는지"를 압축하고, bullets[0]은 거기 없는 구체적 판단·수치·대상을 담아야 함. 예: headline "심평원, 제7차 암질환심의위원회 결과 공개·브렌랩주 등 급여기준 설정" 인데 bullets[0].text가 "심평원, 제7차 암질환심의위원회에서 항암제 급여기준 심의 결과 발표"처럼 같은 내용을 다른 표현으로 되풀이하는 것은 잘못된 예 -- 이 경우 bullets[0]에는 실제 급여기준이 정해진/정해지지 않은 약제명처럼 headline에 없는 세부 내용이 들어가야 함
+- headline_note: headline에 실제로 등장하는 전문용어·낯선 약어(예: "PoC", "소송금융")에 대한 한 줄 설명, "용어: 설명" 형식. bullets의 note와 같은 규칙 -- **headline에 나오지 않는 용어는 설명하지 말고**, 화이트리스트 약칭이나 이미 널리 알려진 용어도 설명하지 말 것. headline에 설명이 필요한 용어가 없으면 빈 문자열("")
 - bullets: 최대 2개 (상한선일 뿐 목표 아님 -- 1개로 충분하면 1개만). 각 항목은:
   - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
   - note: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함)에 대한 한 줄 설명, "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 note도 비워둘 것). 화이트리스트 약칭이나 이미 널리 알려진 용어도 설명하지 말고, 해당 없으면 빈 문자열(""). 예: 화이트리스트에 있는 "심평원"을 note에 "심평원: 건강보험심사평가원"처럼 설명하는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 note를 반드시 빈 문자열("")로 둘 것
@@ -239,6 +246,7 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   const parsed = (await callGemini(buildDeepPrompt(title, fullText), DEEP_RESPONSE_SCHEMA)) as {
     category: DeepAnalysisResult['category'];
     headline: string;
+    headline_note: string;
     bullets: { text: string; note: string; sub_bullets: string[] }[];
     background: string;
     is_reference: boolean;
@@ -248,6 +256,7 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   return {
     category: parsed.category,
     headline: parsed.headline,
+    headlineNote: parsed.headline_note || null,
     bullets: parsed.bullets.map((b) => ({ text: b.text, note: b.note || null, subBullets: b.sub_bullets })),
     background: parsed.background || null,
     isReference: parsed.is_reference,
