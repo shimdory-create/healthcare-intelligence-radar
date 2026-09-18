@@ -12,7 +12,7 @@ import { todayKstDate } from '@/lib/dateFormat';
 // /api/cron/collect run cramming a full day's volume into one pass, which is what made
 // collection alone take 100+ seconds and left almost no time budget for AI analysis (found
 // live 2026-09-17/18 -- see project memory). /api/cron/collect still runs once a day at
-// 07:00 KST for a final catch-up pass plus the report/send step.
+// 08:00 KST for a final catch-up pass plus the report/send step.
 export const maxDuration = 200;
 
 const AI_RESERVE_MS = 30_000;
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   // near-zero real news volume on weekends/holidays (see project memory's publish-time
   // histogram) -- skip the whole pass rather than burn a run for nothing. Collection isn't
-  // lost: the daily 07:00 report run still does its own catch-up pass every day regardless.
+  // lost: the daily 08:00 report run still does its own catch-up pass every day regardless.
   if (isNonBusinessDay(todayKstDate())) {
     return NextResponse.json({ summary: 'skipped: non-business day' });
   }

@@ -25,12 +25,15 @@ import { isNonBusinessDay } from '@/lib/holidays';
 
 export const maxDuration = 300;
 
-// Runs once daily at 07:00 KST -- late enough that the ~06:00 KST publish spike (see project
-// memory's publish-time histogram) is fully in every outlet's RSS feed by the time this
-// fires, not half-missed the way a 06:00 run would be. Collection through the rest of the
-// business day now happens via the separate, more frequent /api/cron/enrich (see its own doc
-// comment) -- this route's own collectAll()/enrichArticles() call below is just the final
-// overnight (00:00-07:00) catch-up pass, plus the report/send step.
+// Runs once daily at 08:00 KST -- moved from 07:00 on 2026-09-19 so the report captures as
+// much of the morning news cycle as possible (delivery lands 08:00-09:00 given the route's
+// own run time). The ~06:00 KST publish spike (see project memory's publish-time histogram)
+// is already pre-collected and AI-analyzed by the 06:00 intraday run (see /api/cron/enrich's
+// doc comment); this route's own collectAll()/enrichArticles() call below is just the final
+// overnight (00:00-08:00) catch-up pass for whatever came in after that, plus the
+// report/send step. The intraday schedule deliberately has no 08:00 slot of its own -- this
+// route's catch-up pass already covers it, so a separate intraday run at the same time would
+// just duplicate the work.
 //
 // INVARIANT: aiDeadline must always be meaningfully earlier than reportDeadline. AI
 // enrichment runs first, and the deep-analysis report phase (below) needs real wall-clock

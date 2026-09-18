@@ -33,7 +33,7 @@ function relativeTime(date: Date): string {
 }
 
 const ROUTE_LABELS: Record<string, string> = {
-  collect: '일일 수집+리포트 (07:00)',
+  collect: '일일 수집+리포트 (08:00)',
   enrich: '인트라데이 수집',
 };
 

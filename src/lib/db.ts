@@ -627,7 +627,7 @@ export async function saveAiAnalysis(a: Omit<AiAnalysis, 'analyzedAt'>): Promise
 }
 
 export interface PipelineRunRecord {
-  /** 'collect' = the once-daily 07:00 KST route (collect + AI + dedupe + report + send).
+  /** 'collect' = the once-daily 08:00 KST route (collect + AI + dedupe + report + send).
    *  'enrich' = the several-times-a-day intraday route (collect + AI + dedupe only). */
   route: 'collect' | 'enrich';
   startedAt: Date;
