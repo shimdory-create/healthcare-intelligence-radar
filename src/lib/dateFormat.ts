@@ -1,3 +1,12 @@
+/** the current KST calendar date ('YYYY-MM-DD'), from the real clock -- not
+ *  `new Date().toISOString().slice(0, 10)`, which reads UTC and reports the wrong calendar
+ *  date for the ~9 hours a day (00:00-08:59 KST) that are still "yesterday" in UTC. The
+ *  'en-CA' locale is just a convenient way to get an ISO-shaped YYYY-MM-DD string out of
+ *  `toLocaleDateString` while still honoring the `timeZone` option. */
+export function todayKstDate(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+}
+
 /** formats a KST calendar date ('YYYY-MM-DD') as e.g. "9월 3일 (목)" */
 export function formatKstDate(dateStr: string): string {
   // noon avoids any DST/boundary edge cases when formatting a bare calendar date

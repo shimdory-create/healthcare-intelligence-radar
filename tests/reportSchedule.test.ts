@@ -1,75 +1,61 @@
 import { describe, it, expect } from 'vitest';
-import { reportDateRange } from '@/lib/reportSchedule';
+import { datesSince, previousKstDate } from '@/lib/reportSchedule';
 
-// All calendar dates below were independently verified (not by trusting the function under
-// test) via `date -d '<date>' +%A`, and cross-checked against the holiday table in
-// src/lib/holidays.ts to confirm which of them are/aren't public holidays.
-//
-// 2026-09-19 = Saturday, 2026-09-20 = Sunday, 2026-09-21 = Monday (plain, mid-month, no
-//   nearby holiday)
-// 2026-05-30 = Saturday, 2026-05-31 = Sunday, 2026-06-01 = Monday (crosses a month boundary,
-//   no nearby holiday)
-// 2033-12-31 = Saturday, 2034-01-01 = Sunday (also 신정, but redundant with the weekend check),
-//   2034-01-02 = Monday, not itself a holiday (crosses a year boundary)
-// 2026-09-15..18 = Tuesday..Friday, no nearby holiday
-// 2026-12-24 = Thursday (business), 2026-12-25 = Friday (크리스마스, fixed holiday),
-//   2026-12-26 = Saturday, 2026-12-27 = Sunday, 2026-12-28 = Monday (business) -- a holiday
-//   immediately followed by a weekend
-// 2027-08-13 = Friday (business), 2027-08-14 = Saturday, 2027-08-15 = Sunday (both weekend --
-//   also the real 광복절, but redundant with the weekend check), 2027-08-16 = Monday (광복절
-//   대체공휴일, a substitute holiday landing right after the weekend), 2027-08-17 = Tuesday
-//   (business) -- a weekend immediately followed by a substitute holiday
-
-describe('reportDateRange', () => {
-  it('returns null for a Saturday', () => {
-    expect(reportDateRange('2026-09-19')).toBeNull();
+describe('datesSince', () => {
+  it('returns a single date for a normal one-day gap', () => {
+    expect(datesSince('2026-09-17', '2026-09-18')).toEqual(['2026-09-18']);
   });
 
-  it('returns null for a Sunday', () => {
-    expect(reportDateRange('2026-09-20')).toBeNull();
+  it('returns every date strictly after the watermark through and including the target date', () => {
+    expect(datesSince('2026-09-15', '2026-09-18')).toEqual(['2026-09-16', '2026-09-17', '2026-09-18']);
   });
 
-  it('returns null for a weekday public holiday', () => {
-    expect(reportDateRange('2026-12-25')).toBeNull(); // 크리스마스, Friday
+  it('spans a weekend with no special-casing needed -- every date in the gap is just included', () => {
+    // Friday report already sent through 2026-09-18 (Friday); next report on Monday
+    // 2026-09-21 should pick up Sat/Sun/Mon in one pass
+    expect(datesSince('2026-09-18', '2026-09-21')).toEqual(['2026-09-19', '2026-09-20', '2026-09-21']);
   });
 
-  it('returns [saturday, sunday, monday] for a plain Monday', () => {
-    expect(reportDateRange('2026-09-21')).toEqual(['2026-09-19', '2026-09-20', '2026-09-21']);
+  it('handles the case the old rollup design could not: a preceding business day\'s own leftover afternoon', () => {
+    // under the new intraday-collection schedule, Friday's afternoon collection happens
+    // AFTER Friday's own morning report already went out -- so Friday itself (a business
+    // day) is a pending chunk the Monday report must still include, not just the weekend
+    const range = datesSince('2026-09-17', '2026-09-21'); // watermark = Thursday (last report morning)
+    expect(range).toContain('2026-09-18'); // Friday itself is included
   });
 
   it('rolls back correctly across a month boundary', () => {
-    expect(reportDateRange('2026-06-01')).toEqual(['2026-05-30', '2026-05-31', '2026-06-01']);
+    expect(datesSince('2026-05-29', '2026-06-01')).toEqual(['2026-05-30', '2026-05-31', '2026-06-01']);
   });
 
   it('rolls back correctly across a year boundary', () => {
-    expect(reportDateRange('2034-01-02')).toEqual(['2033-12-31', '2034-01-01', '2034-01-02']);
+    expect(datesSince('2033-12-30', '2034-01-02')).toEqual(['2033-12-31', '2034-01-01', '2034-01-02']);
   });
 
-  it.each(['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'])(
-    'returns a single-element array for a plain weekday (%s)',
-    (date) => {
-      expect(reportDateRange(date)).toEqual([date]);
-    },
-  );
-
-  it('rolls a midweek public holiday into the next business day, even without an adjacent weekend', () => {
-    // this is the case that used to be silently dropped: only Sat/Sun ever rolled up into
-    // Monday, so a weekday holiday's report never reached anyone -- see the project memory
-    // entry and the 2026-09-15 fix commit for the incident this test guards against
-    expect(reportDateRange('2026-09-16')).toEqual(['2026-09-16']); // sanity: plain Wednesday alone
+  it('returns an empty array when there is nothing new since the last report', () => {
+    expect(datesSince('2026-09-18', '2026-09-18')).toEqual([]);
   });
 
-  it('rolls up a holiday immediately followed by a weekend, into the weekend, into the next business day', () => {
-    expect(reportDateRange('2026-12-28')).toEqual(['2026-12-25', '2026-12-26', '2026-12-27', '2026-12-28']);
+  it('returns an empty array when the watermark is somehow ahead of the target date', () => {
+    expect(datesSince('2026-09-19', '2026-09-18')).toEqual([]);
   });
 
-  it('rolls up a weekend immediately followed by a substitute holiday, into the next business day', () => {
-    expect(reportDateRange('2027-08-17')).toEqual(['2027-08-14', '2027-08-15', '2027-08-16', '2027-08-17']);
+  it('caps the span at MAX_REPORT_SPAN_DAYS as a safety net against a stuck watermark', () => {
+    const range = datesSince('2020-01-01', '2026-09-18');
+    expect(range).toHaveLength(14);
+  });
+});
+
+describe('previousKstDate', () => {
+  it('returns the day before, in the same YYYY-MM-DD shape', () => {
+    expect(previousKstDate('2026-09-18')).toBe('2026-09-17');
   });
 
-  it('does not include a business day two days before a rollup range', () => {
-    // 2026-12-24 (Thursday) is a normal business day right before the Christmas/weekend rollup
-    // above -- it must not be swept into 2026-12-28's range
-    expect(reportDateRange('2026-12-28')).not.toContain('2026-12-24');
+  it('rolls back correctly across a month boundary', () => {
+    expect(previousKstDate('2026-06-01')).toBe('2026-05-31');
+  });
+
+  it('rolls back correctly across a year boundary', () => {
+    expect(previousKstDate('2026-01-01')).toBe('2025-12-31');
   });
 });

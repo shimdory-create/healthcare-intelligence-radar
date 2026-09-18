@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SourceConfig } from '@/lib/sources.config';
 
 const fetchSourceArticles = vi.fn();
-const articleUrlExists = vi.fn();
-const findSameDayTitleDuplicate = vi.fn();
+const getExistingUrls = vi.fn();
+const getExistingTitleDayKeys = vi.fn();
 const insertArticle = vi.fn();
 
 vi.mock('@/lib/rss', () => ({ fetchSourceArticles }));
-vi.mock('@/lib/db', () => ({ articleUrlExists, findSameDayTitleDuplicate, insertArticle }));
+vi.mock('@/lib/db', () => ({ getExistingUrls, getExistingTitleDayKeys, insertArticle }));
 
 function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
   return {
@@ -23,8 +23,8 @@ function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
 
 beforeEach(() => {
   fetchSourceArticles.mockReset();
-  articleUrlExists.mockReset().mockResolvedValue(false);
-  findSameDayTitleDuplicate.mockReset().mockResolvedValue(false);
+  getExistingUrls.mockReset().mockResolvedValue(new Set());
+  getExistingTitleDayKeys.mockReset().mockResolvedValue(new Set());
   insertArticle.mockReset().mockResolvedValue(true);
 });
 
@@ -105,5 +105,78 @@ describe('collectSource invalid-URL visibility', () => {
     expect(summary.fetched).toBe(2);
     expect(summary.inserted).toBe(1);
     expect(summary.skippedInvalidUrl).toBe(1);
+  });
+});
+
+describe('collectSource batched dedup', () => {
+  it('fetches existing-URL/title-day state in one call each, not per article', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    fetchSourceArticles.mockResolvedValue([
+      { title: 'A', url: 'https://example.com/a', snippet: 'GLP-1', publishedAt: new Date('2026-09-18T01:00:00Z') },
+      { title: 'B', url: 'https://example.com/b', snippet: 'GLP-1', publishedAt: new Date('2026-09-18T02:00:00Z') },
+      { title: 'C', url: 'https://example.com/c', snippet: 'GLP-1', publishedAt: new Date('2026-09-18T03:00:00Z') },
+    ]);
+
+    await collectSource(makeSource({ tier: 1 }));
+
+    expect(getExistingUrls).toHaveBeenCalledTimes(1);
+    expect(getExistingTitleDayKeys).toHaveBeenCalledTimes(1);
+    expect(getExistingUrls).toHaveBeenCalledWith(['https://example.com/a', 'https://example.com/b', 'https://example.com/c']);
+  });
+
+  it('skips an article whose URL already exists in the DB', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    getExistingUrls.mockResolvedValue(new Set(['https://example.com/dup']));
+    fetchSourceArticles.mockResolvedValue([{ title: '기사', url: 'https://example.com/dup', snippet: 'GLP-1' }]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.inserted).toBe(0);
+    expect(summary.skippedDuplicate).toBe(1);
+    expect(insertArticle).not.toHaveBeenCalled();
+  });
+
+  it('skips an article that is a same-day title duplicate of a row already in the DB', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    const publishedAt = new Date('2026-09-18T01:00:00Z');
+    const dayStart = Date.UTC(2026, 8, 18);
+    // normalizeTitle output is what the composite key is built from -- use the same title
+    // for both the mocked existing key and the fetched article so they match after normalization
+    const { normalizeTitle } = await import('@/lib/normalize');
+    const titleNorm = normalizeTitle('중복 제목 기사');
+    getExistingTitleDayKeys.mockResolvedValue(new Set([`${titleNorm}::${dayStart}`]));
+    fetchSourceArticles.mockResolvedValue([{ title: '중복 제목 기사', url: 'https://example.com/new', snippet: 'GLP-1', publishedAt }]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.inserted).toBe(0);
+    expect(summary.skippedDuplicate).toBe(1);
+  });
+
+  it('skips the second of two same-day same-title articles within one source\'s own fetch, even though neither is in the DB yet', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    const publishedAt = new Date('2026-09-18T01:00:00Z');
+    fetchSourceArticles.mockResolvedValue([
+      { title: '속보 중복', url: 'https://example.com/first', snippet: 'GLP-1', publishedAt },
+      { title: '속보 중복', url: 'https://example.com/second', snippet: 'GLP-1', publishedAt },
+    ]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.inserted).toBe(1);
+    expect(summary.skippedDuplicate).toBe(1);
+  });
+
+  it('does not flag two articles with the same title on different days as duplicates', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    fetchSourceArticles.mockResolvedValue([
+      { title: '제목', url: 'https://example.com/day1', snippet: 'GLP-1', publishedAt: new Date('2026-09-17T01:00:00Z') },
+      { title: '제목', url: 'https://example.com/day2', snippet: 'GLP-1', publishedAt: new Date('2026-09-18T01:00:00Z') },
+    ]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.inserted).toBe(2);
+    expect(summary.skippedDuplicate).toBe(0);
   });
 });

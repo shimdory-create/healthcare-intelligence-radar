@@ -1,5 +1,24 @@
-import { describe, it, expect } from 'vitest';
-import { formatReportDate } from '@/lib/dateFormat';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { formatReportDate, todayKstDate } from '@/lib/dateFormat';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('todayKstDate', () => {
+  it('reports the KST calendar date, not UTC\'s, during the ~9 hours a day they differ', () => {
+    // 2026-09-17T16:30:00Z is still 2026-09-18 01:30 KST -- UTC would say the 17th
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-17T16:30:00Z'));
+    expect(todayKstDate()).toBe('2026-09-18');
+  });
+
+  it('matches UTC\'s date once past the boundary', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-18T10:00:00Z')); // 2026-09-18 19:00 KST
+    expect(todayKstDate()).toBe('2026-09-18');
+  });
+});
 
 describe('formatReportDate', () => {
   it('formats a date as \'YY.M.D(요일) with no leading zeros and no space before the parenthesis', () => {

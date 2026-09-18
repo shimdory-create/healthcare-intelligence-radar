@@ -19,23 +19,35 @@ export interface ArticleInsert {
   priority: PriorityBand;
 }
 
-export async function articleUrlExists(url: string): Promise<boolean> {
-  const rows = await sql`select 1 from articles where url = ${url} limit 1`;
-  return rows.length > 0;
+/** one round trip for a whole source's fetched batch instead of one per article. Found live
+ *  2026-09-18: collectAll()'s 24 sources running one DB round trip per article (this plus
+ *  getExistingTitleDayKeys, both formerly sequential per-article calls) queued up against
+ *  each other enough to make a single collection pass take 100+ seconds, most of it spent
+ *  re-confirming articles already known to be duplicates. */
+export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
+  if (urls.length === 0) return new Set();
+  const rows = await sql`select url from articles where url = any(${urls})`;
+  return new Set((rows as unknown as { url: string }[]).map((r) => r.url));
 }
 
-export async function findSameDayTitleDuplicate(titleNorm: string, publishedAt: Date): Promise<boolean> {
-  if (Number.isNaN(publishedAt.getTime())) return false;
-  const dayStart = new Date(Date.UTC(publishedAt.getUTCFullYear(), publishedAt.getUTCMonth(), publishedAt.getUTCDate()));
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+/** one round trip for every distinct title_norm in a source's fetched batch, instead of one
+ *  per article. Returns the set of "titleNorm::dayStartEpochMs" composite keys (UTC day
+ *  bucket) that already exist in the DB -- callers build the same key for each candidate
+ *  article to check membership, and should also track keys seen earlier in their own batch
+ *  (this function only knows about rows already committed to the DB). */
+export async function getExistingTitleDayKeys(titleNorms: string[]): Promise<Set<string>> {
+  const distinct = [...new Set(titleNorms)];
+  if (distinct.length === 0) return new Set();
   const rows = await sql`
-    select 1 from articles
-    where title_norm = ${titleNorm}
-      and published_at >= ${dayStart}
-      and published_at < ${dayEnd}
-    limit 1
+    select title_norm, published_at from articles
+    where title_norm = any(${distinct}) and published_at is not null
   `;
-  return rows.length > 0;
+  const keys = new Set<string>();
+  for (const r of rows as unknown as { title_norm: string; published_at: Date }[]) {
+    const dayStart = Date.UTC(r.published_at.getUTCFullYear(), r.published_at.getUTCMonth(), r.published_at.getUTCDate());
+    keys.add(`${r.title_norm}::${dayStart}`);
+  }
+  return keys;
 }
 
 export async function insertArticle(a: ArticleInsert): Promise<boolean> {
@@ -109,8 +121,11 @@ export interface ArticleFilters {
   tag?: string;
   sourceId?: string;
   search?: string;
-  /** a KST calendar date as 'YYYY-MM-DD', restricting to that day's collection batch (collected_at) */
-  collectedDate?: string;
+  /** a KST calendar date ('YYYY-MM-DD') restricting to that day's collection batch
+   *  (collected_at), or an array of dates to match any of them -- the daily digest can now
+   *  span several collected dates in one send (see reportSchedule.ts's datesSince), since
+   *  collection moved from once daily to several times during business hours. */
+  collectedDate?: string | string[];
   limit?: number;
   offset?: number;
 }
@@ -120,6 +135,17 @@ function kstDayRange(dateStr: string): [Date, Date] {
   const start = new Date(`${dateStr}T00:00:00+09:00`);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return [start, end];
+}
+
+/** the collected_at condition for either a single KST date (a plain range check) or an array
+ *  of dates (an ANY match against the KST calendar date) -- shared by buildConditions and
+ *  getPriorityCounts so both filter identically regardless of which shape is passed. */
+function collectedDateCondition(collectedDate: string | string[]): any {
+  if (Array.isArray(collectedDate)) {
+    return sql`(a.collected_at at time zone 'Asia/Seoul')::date = any(${collectedDate}::date[])`;
+  }
+  const [dayStart, dayEnd] = kstDayRange(collectedDate);
+  return sql`a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`;
 }
 
 function rowToArticle(r: any): ArticleRow {
@@ -162,9 +188,8 @@ function buildConditions(filters: ArticleFilters, exclude?: FacetField): any[] {
     const pattern = `%${filters.search}%`;
     conditions.push(sql`(a.title ilike ${pattern} or a.content_snippet ilike ${pattern})`);
   }
-  if (exclude !== 'collectedDate' && filters.collectedDate) {
-    const [dayStart, dayEnd] = kstDayRange(filters.collectedDate);
-    conditions.push(sql`a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`);
+  if (exclude !== 'collectedDate' && filters.collectedDate && filters.collectedDate.length > 0) {
+    conditions.push(collectedDateCondition(filters.collectedDate));
   }
   return conditions;
 }
@@ -355,13 +380,13 @@ export interface PriorityCounts {
   aiAnalyzed: number;
 }
 
-/** counts by priority band for a given collected date (KST), or across all time if omitted --
- *  intentionally ignores tier/source/tag/search so it reads as "today's collection batch", not a filtered subset */
-export async function getPriorityCounts(collectedDate?: string): Promise<PriorityCounts> {
+/** counts by priority band for a given collected date (KST) or set of dates, or across all
+ *  time if omitted -- intentionally ignores tier/source/tag/search so it reads as "this
+ *  collection batch", not a filtered subset */
+export async function getPriorityCounts(collectedDate?: string | string[]): Promise<PriorityCounts> {
   let where: any = sql`where a.duplicate_of_id is null`;
-  if (collectedDate) {
-    const [dayStart, dayEnd] = kstDayRange(collectedDate);
-    where = sql`${where} and a.collected_at >= ${dayStart} and a.collected_at < ${dayEnd}`;
+  if (collectedDate && collectedDate.length > 0) {
+    where = sql`${where} and ${collectedDateCondition(collectedDate)}`;
   }
   const rows = await sql`
     select

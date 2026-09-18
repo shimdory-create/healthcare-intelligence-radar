@@ -1,9 +1,9 @@
 import { SOURCES, type SourceConfig } from './sources.config';
-import { fetchSourceArticles } from './rss';
+import { fetchSourceArticles, type RawArticle } from './rss';
 import { normalizeTitle } from './normalize';
 import { matchTags } from './tagging';
 import { scoreToPriority } from './priority';
-import { articleUrlExists, findSameDayTitleDuplicate, insertArticle } from './db';
+import { getExistingUrls, getExistingTitleDayKeys, insertArticle } from './db';
 
 export interface CollectionSummary {
   sourceId: string;
@@ -21,6 +21,14 @@ export interface CollectionSummary {
   error: string | null;
 }
 
+/** same UTC-day bucketing as db.ts's getExistingTitleDayKeys/old findSameDayTitleDuplicate --
+ *  kept in one place so a candidate's key always matches how the DB rows were bucketed. */
+function titleDayKey(titleNorm: string, publishedAt: Date): string | null {
+  if (Number.isNaN(publishedAt.getTime())) return null;
+  const dayStart = Date.UTC(publishedAt.getUTCFullYear(), publishedAt.getUTCMonth(), publishedAt.getUTCDate());
+  return `${titleNorm}::${dayStart}`;
+}
+
 export async function collectSource(source: SourceConfig): Promise<CollectionSummary> {
   const summary: CollectionSummary = {
     sourceId: source.id,
@@ -33,26 +41,41 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
   };
 
   try {
-    const articles = await fetchSourceArticles(source);
-    summary.fetched = articles.length;
+    const fetched = await fetchSourceArticles(source);
+    summary.fetched = fetched.length;
 
-    for (const a of articles) {
+    const candidates: { a: RawArticle; titleNorm: string; publishedAt: Date }[] = [];
+    for (const a of fetched) {
       if (!/^https?:\/\//i.test(a.url)) {
         summary.skippedInvalidUrl++;
         continue;
       }
+      candidates.push({ a, titleNorm: normalizeTitle(a.title), publishedAt: a.publishedAt ?? new Date() });
+    }
 
-      if (await articleUrlExists(a.url)) {
+    // two round trips total for this whole source's batch, instead of up to two per article --
+    // see getExistingUrls/getExistingTitleDayKeys' doc comments for why this matters
+    const [existingUrls, existingTitleDayKeys] = await Promise.all([
+      getExistingUrls(candidates.map((c) => c.a.url)),
+      getExistingTitleDayKeys(candidates.map((c) => c.titleNorm)),
+    ]);
+    // title+day keys seen earlier in THIS batch -- getExistingTitleDayKeys only knows about
+    // rows already committed to the DB, so two same-day same-title items within one source's
+    // own fetch (a rare but real correction/republish case) still need catching here
+    const seenTitleDayKeys = new Set<string>();
+
+    for (const { a, titleNorm, publishedAt } of candidates) {
+      if (existingUrls.has(a.url)) {
         summary.skippedDuplicate++;
         continue;
       }
 
-      const titleNorm = normalizeTitle(a.title);
-      const publishedAt = a.publishedAt ?? new Date();
-      if (await findSameDayTitleDuplicate(titleNorm, publishedAt)) {
+      const dayKey = titleDayKey(titleNorm, publishedAt);
+      if (dayKey && (existingTitleDayKeys.has(dayKey) || seenTitleDayKeys.has(dayKey))) {
         summary.skippedDuplicate++;
         continue;
       }
+      if (dayKey) seenTitleDayKeys.add(dayKey);
 
       const { tags, score } = matchTags(`${a.title} ${a.snippet}`);
       // tier 1 (government) is always kept regardless of tag match. Tier 3 (healthcare
