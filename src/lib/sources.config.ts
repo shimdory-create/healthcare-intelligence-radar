@@ -1,15 +1,45 @@
 export type SourceTier = 1 | 2 | 3;
-export type FetchMethod = 'rss' | 'google_news_rss';
+export type FetchMethod = 'rss' | 'google_news_rss' | 'html_scrape';
 export type Reliability = 'stable' | 'experimental';
+
+/** CSS selectors describing one board/list page's repeating item structure -- see scrape.ts. */
+export interface ScrapeSelectors {
+  /** selects each repeating list-item element on the page */
+  item: string;
+  /** selects the title text, relative to `item` */
+  title: string;
+  /** selects the anchor whose href is the article URL, relative to `item`. Defaults to `item`
+   *  itself if it's an <a>, else the first <a> inside it. */
+  link?: string;
+  /** selects a date string, relative to `item`. Optional -- some board pages don't show one
+   *  per row, in which case the article falls back to collection time (same as an RSS item
+   *  with no parseable pubDate). */
+  date?: string;
+}
+
+export interface ScrapeConfig {
+  /** the board/list page to fetch -- not a feed endpoint, just the page a human would browse */
+  url: string;
+  selectors: ScrapeSelectors;
+  /** parses this site's own date-string format into a Date, or null if unparseable. Every
+   *  site formats its list-page dates differently (with/without year, dots vs dashes,
+   *  relative "3시간 전" text, ...) -- there's no standard the way RSS's pubDate has one, so
+   *  each scraped source supplies its own. */
+  parseDate?: (raw: string) => Date | null;
+}
 
 export interface SourceConfig {
   id: string;
   name: string;
-  rssUrl: string;
+  /** required for fetchMethod 'rss'/'google_news_rss'. Scrape sources use `scrape.url`
+   *  instead -- optional here so a scrape-only source doesn't need a meaningless placeholder. */
+  rssUrl?: string;
   tier: SourceTier;
   reliability: Reliability;
   fetchMethod: FetchMethod;
   requiresBrowserUA?: boolean;
+  /** required for fetchMethod 'html_scrape' -- see scrape.ts */
+  scrape?: ScrapeConfig;
 }
 
 export const SOURCES: SourceConfig[] = [

@@ -1,5 +1,6 @@
 import { SOURCES, type SourceConfig } from './sources.config';
 import { fetchSourceArticles, type RawArticle } from './rss';
+import { fetchScrapedArticles } from './scrape';
 import { normalizeTitle } from './normalize';
 import { matchTags } from './tagging';
 import { scoreToPriority } from './priority';
@@ -41,7 +42,8 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
   };
 
   try {
-    const fetched = await fetchSourceArticles(source);
+    const fetched =
+      source.fetchMethod === 'html_scrape' ? await fetchScrapedArticles(source) : await fetchSourceArticles(source);
     summary.fetched = fetched.length;
 
     const candidates: { a: RawArticle; titleNorm: string; publishedAt: Date }[] = [];

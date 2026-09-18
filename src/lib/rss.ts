@@ -49,6 +49,10 @@ function decodeHtmlEntities(text: string): string {
 }
 
 export async function fetchSourceArticles(source: SourceConfig): Promise<RawArticle[]> {
+  if (!source.rssUrl) {
+    throw new Error(`${source.id}: fetchMethod is '${source.fetchMethod}' but no rssUrl is set`);
+  }
+
   const headers: Record<string, string> = {};
   if (source.requiresBrowserUA) {
     headers['User-Agent'] = BROWSER_USER_AGENT;
