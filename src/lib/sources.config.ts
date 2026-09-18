@@ -172,6 +172,8 @@ export const SOURCES: SourceConfig[] = [
   { id: 'newsis', name: '뉴시스', rssUrl: 'https://www.newsis.com/RSS/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'einfomax', name: '연합인포맥스', rssUrl: 'https://news.einfomax.co.kr/rss/allArticle.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'sisajournale', name: '시사저널e', rssUrl: 'https://www.sisajournal-e.com/rss/allArticle.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  // 원래 언론사 전수조사 때 누락됐던 것을 사용자가 지적해서 추가 (2026-09-18)
+  { id: 'fnnews', name: '파이낸셜뉴스', rssUrl: 'https://www.fnnews.com/rss/r20/fn_realnews_economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
 
   // Tier 3 — 헬스케어/보험 전문지
   { id: 'docdocdoc', name: '청년의사', rssUrl: 'https://www.docdocdoc.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
