@@ -49,6 +49,22 @@ export const SOURCES: SourceConfig[] = [
   { id: 'mfds', name: '식품의약품안전처', rssUrl: 'http://www.mfds.go.kr/www/rss/brd.do?brdId=ntc0021', tier: 1, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'hira', name: '건강보험심사평가원', rssUrl: 'https://www.hira.or.kr/cms/inform/02/news.xml', tier: 1, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'khidi', name: '한국보건산업진흥원', rssUrl: 'https://www.khidi.or.kr/rss?menuId=MENU00100', tier: 1, reliability: 'stable', fetchMethod: 'rss' },
+  {
+    id: 'nhis',
+    name: '국민건강보험공단',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.nhis.or.kr/nhis/together/wbhaea01600m01.do',
+      selectors: { item: 'tbody tr', title: 'td.a-l a.a-link', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
 
   // Tier 2 — 종합/경제지
   { id: 'yna', name: '연합뉴스', rssUrl: 'https://www.yna.co.kr/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },

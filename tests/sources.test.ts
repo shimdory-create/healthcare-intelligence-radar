@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { SOURCES } from '@/lib/sources.config';
 
 describe('SOURCES', () => {
-  it('has exactly 33 sources', () => {
-    expect(SOURCES.length).toBe(33);
+  it('has exactly 34 sources', () => {
+    expect(SOURCES.length).toBe(34);
   });
 
   it('has unique ids', () => {
@@ -11,8 +11,8 @@ describe('SOURCES', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('has 5 tier-1, 16 tier-2, 12 tier-3 sources', () => {
-    expect(SOURCES.filter((s) => s.tier === 1).length).toBe(5);
+  it('has 6 tier-1, 16 tier-2, 12 tier-3 sources', () => {
+    expect(SOURCES.filter((s) => s.tier === 1).length).toBe(6);
     expect(SOURCES.filter((s) => s.tier === 2).length).toBe(16);
     expect(SOURCES.filter((s) => s.tier === 3).length).toBe(12);
   });
