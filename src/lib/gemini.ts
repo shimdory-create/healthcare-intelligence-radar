@@ -173,7 +173,9 @@ const DEEP_RESPONSE_SCHEMA = {
         properties: {
           text: { type: 'string' },
           note: { type: 'string' },
-          sub_bullets: { type: 'array', maxItems: 2, items: { type: 'string' } },
+          // 2 is the normal cap; 5 covers the exception case (see buildDeepPrompt's sub_bullets
+          // rule) where a single announcement bundles several distinct components worth listing
+          sub_bullets: { type: 'array', maxItems: 5, items: { type: 'string' } },
         },
         required: ['text', 'note', 'sub_bullets'],
       },
@@ -221,12 +223,14 @@ ${fullText.slice(0, 6000)}
   - "국내 보험·제도": 국내 보험사·건강보험·정부 제도/정책 관련
   - "국내 산업": 국내 제약사·의료기기·헬스케어 기업의 사업 활동
   - "Global": 해외 기업·해외 규제기관(FDA 등) 관련
-- headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제"). **bullets[0]의 text를 단어만 바꿔 반복하지 말 것** -- headline은 "무엇이 있었는지"를 압축하고, bullets[0]은 거기 없는 구체적 판단·수치·대상을 담아야 함. 예: headline "심평원, 제7차 암질환심의위원회 결과 공개·브렌랩주 등 급여기준 설정" 인데 bullets[0].text가 "심평원, 제7차 암질환심의위원회에서 항암제 급여기준 심의 결과 발표"처럼 같은 내용을 다른 표현으로 되풀이하는 것은 잘못된 예 -- 이 경우 bullets[0]에는 실제 급여기준이 정해진/정해지지 않은 약제명처럼 headline에 없는 세부 내용이 들어가야 함
-- headline_note: headline에 실제로 등장하는 전문용어·낯선 약어(예: "PoC", "소송금융")에 대한 한 줄 설명, "용어: 설명" 형식. bullets의 note와 같은 규칙 -- **headline에 나오지 않는 용어는 설명하지 말고**, 화이트리스트 약칭이나 이미 널리 알려진 용어도 설명하지 말 것. headline에 설명이 필요한 용어가 없으면 빈 문자열("")
+- headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제"). **bullets[0]의 text를 단어만 바꿔 반복하지 말 것** -- headline은 "무엇이 있었는지"를 압축하고, bullets[0]은 거기 없는 구체적 판단·수치·대상을 담아야 함. 잘못된 예:
+  - headline "심평원, 제7차 암질환심의위원회 결과 공개·브렌랩주 등 급여기준 설정" 인데 bullets[0].text가 "심평원, 제7차 암질환심의위원회에서 항암제 급여기준 심의 결과 발표"처럼 같은 내용을 다른 표현으로 되풀이 -- 이 경우 bullets[0]에는 실제 급여기준이 정해진/정해지지 않은 약제명처럼 headline에 없는 세부 내용이 들어가야 함
+  - headline "질병청, 코로나19 예방접종 필수 전환·10월 12일부터 고위험군 대상 순차 시행" 인데 bullets[0].text가 "코로나19 예방접종을 임시에서 필수 예방접종으로 전환하고 10월 12일부터 고위험군 대상 순차 시행"처럼 거의 같은 문장을 반복 -- 이 경우 bullets[0]에는 접종 백신 종류·물량, 동시접종 권고처럼 headline에 없는 세부 내용이 들어가야 함 (실제 사고 사례: 그런 내용이 bullets[1]에 있었는데 bullets[0]에 들어갔어야 했음)
+- headline_note: headline에 실제로 등장하는 전문용어·낯선 약어(예: "PoC", "소송금융") 또는 생소한 기업·법인·기관명(예: "Allianz Partners", "파라메타")에 대한 한 줄 설명, "용어: 설명" 형식. bullets의 note와 같은 규칙 -- **headline에 문자 그대로 등장하는 용어만 설명할 것. 기사 주제와 관련은 있지만 headline이나 어느 bullet에도 실제로 쓰이지 않은 배경지식 용어는 설명하지 말 것.** 잘못된 예(실제 사고 사례): headline이 "SK바이오팜, 퍼스트바이오 파킨슨병 후보물질 도입·오픈이노베이션 가동"이고 bullets 어디에도 "DMT"라는 단어가 없는데 headline_note에 "DMT: 질병의 진행 자체를 늦추는 질병조절치료제"라고 설명 -- 파킨슨병 신약과 관련은 있는 배경지식이지만 headline/bullets 어디에도 "DMT"라는 단어 자체가 없으므로 이 경우 headline_note는 빈 문자열이어야 함. 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말 것. headline에 설명이 필요한 용어가 없으면 빈 문자열("")
 - bullets: 최대 2개 (상한선일 뿐 목표 아님 -- 1개로 충분하면 1개만). 각 항목은:
   - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
-  - note: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함)에 대한 한 줄 설명, "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 note도 비워둘 것). 화이트리스트 약칭이나 이미 널리 알려진 용어도 설명하지 말고, 해당 없으면 빈 문자열(""). 예: 화이트리스트에 있는 "심평원"을 note에 "심평원: 건강보험심사평가원"처럼 설명하는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 note를 반드시 빈 문자열("")로 둘 것
-  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 최대 2개 (역시 상한선, 필요한 만큼만), 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것
+  - note: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함) 또는 생소한 기업·법인명에 대한 한 줄 설명, "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 note도 비워둘 것). 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말고, 해당 없으면 빈 문자열(""). 예: 화이트리스트에 있는 "심평원"을 note에 "심평원: 건강보험심사평가원"처럼 설명하는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 note를 반드시 빈 문자열("")로 둘 것
+  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 보통 최대 2개 (상한선, 필요한 만큼만) -- **단, 하나의 발표/출시에 서로 다른 개별 구성요소(하위 서비스, 세부 상품 등)가 여러 개 묶여 있고 그 각각을 나열하는 것 자체가 핵심 정보인 경우(예: 하나의 통합 솔루션이 5개의 개별 서비스로 구성)엔 예외적으로 5개까지 나열 가능**. 그 외 일반적인 경우는 여전히 2개 이내로 압축. 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것
 - background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). **bullets/sub_bullets에 이미 나온 사실을 반복하지 말 것** -- 거기 없는 추가 맥락일 때만 의미가 있음. 없으면 없는 대로 두는 게 기본값 -- 이해에 꼭 필요한 경우에만 채우고, 그렇지 않으면 빈 문자열("")
   예: sub_bullets에 이미 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"이 있는데 background에 똑같이 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"을 또 쓰는 것은 잘못된 예 -- 이 경우 background는 빈 문자열("")이어야 함
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
@@ -236,6 +240,22 @@ ${fullText.slice(0, 6000)}
   일반적으로: 채용/인사/개인 수상, 단순 행사 개최 예고(내용 없이 일정만), 기관 내부 행정(민원 처리 개선 등)처럼 보험사의 상품·서비스·정책 판단에 아무 영향을 주지 않는 기사는 매체 수와 무관하게 false. 반대로 제도·가격·신제품·임상·규제처럼 실제로 무언가가 바뀌거나 영향을 주는 내용이면 true.
 
 지어내지 말고, 본문에 실제로 나온 내용만 사용하세요. 불필요하게 길게 쓰지 마세요.`;
+}
+
+/** every note follows a "용어: 설명" format (enforced by the prompt) -- if the term before the
+ *  colon doesn't actually appear in the text the note is attached to, the note is explaining
+ *  something never written into the visible copy. Found live 2026-09-18: a headline_note
+ *  "DMT: 질병의 진행 자체를 늦추는 질병조절치료제" sat under a headline ("SK바이오팜, 퍼스트바이오
+ *  파킨슨병 후보물질 도입·오픈이노베이션 가동") that never used the word "DMT" anywhere -- Gemini
+ *  added background knowledge relevant to the article's topic without surfacing the term itself
+ *  into any bullet or the headline. The prompt rule already said not to do this; prompt rules
+ *  alone are a probabilistic improvement at best (see the style guide's §2.3/§2.9 history), so
+ *  this drops the note deterministically instead of just asking nicely. */
+function dropOrphanedNote(note: string | null, text: string): string | null {
+  if (!note) return null;
+  const term = note.split(':')[0]?.trim();
+  if (!term) return note;
+  return text.includes(term) ? note : null;
 }
 
 /** deep, fact-dense analysis of a single article's full text for the Market Intelligence
@@ -256,8 +276,12 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   return {
     category: parsed.category,
     headline: parsed.headline,
-    headlineNote: parsed.headline_note || null,
-    bullets: parsed.bullets.map((b) => ({ text: b.text, note: b.note || null, subBullets: b.sub_bullets })),
+    headlineNote: dropOrphanedNote(parsed.headline_note || null, parsed.headline),
+    bullets: parsed.bullets.map((b) => ({
+      text: b.text,
+      note: dropOrphanedNote(b.note || null, b.text),
+      subBullets: b.sub_bullets,
+    })),
     background: parsed.background || null,
     isReference: parsed.is_reference,
     isRelevant: parsed.is_relevant,

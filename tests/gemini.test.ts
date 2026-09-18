@@ -141,13 +141,13 @@ describe('analyzeDeep', () => {
     expect(result.isRelevant).toBe(false);
   });
 
-  it('carries a bullet-level note through when Gemini provides one', async () => {
+  it('carries a bullet-level note through when its term appears in that bullet\'s own text', async () => {
     process.env.GEMINI_API_KEY = 'test-key';
     mockGeminiResponse(
       JSON.stringify({
         category: '국내 보험·제도',
         headline: 'h',
-        bullets: [{ text: 't', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
+        bullets: [{ text: '건정심 심의 결과 발표', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: true,
@@ -157,6 +157,45 @@ describe('analyzeDeep', () => {
     const result = await analyzeDeep('제목', '본문');
 
     expect(result.bullets[0].note).toBe('건정심: 건강보험정책심의위원회');
+  });
+
+  it('drops a headline_note whose term never appears in the headline (orphaned note)', async () => {
+    // seen live 2026-09-18: a "DMT: 질병의 진행 자체를 늦추는 질병조절치료제" note under a
+    // headline that never used the word "DMT" anywhere in headline or bullets
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 산업',
+        headline: 'SK바이오팜, 퍼스트바이오 파킨슨병 후보물질 도입·오픈이노베이션 가동',
+        headline_note: 'DMT: 질병의 진행 자체를 늦추는 질병조절치료제',
+        bullets: [{ text: 'LRRK2 및 c-Abl 이중저해 저분자 경구용 화합물 도입', note: '', sub_bullets: [] }],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.headlineNote).toBeNull();
+  });
+
+  it('drops a bullet note whose term never appears in that bullet\'s own text', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 보험·제도',
+        headline: 'h',
+        bullets: [{ text: '급여기준 심의 결과 발표', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.bullets[0].note).toBeNull();
   });
 
   it('throws when GEMINI_API_KEY is not set, same as analyzeArticles', async () => {
