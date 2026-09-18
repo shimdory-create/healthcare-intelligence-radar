@@ -98,6 +98,26 @@ export const SOURCES: SourceConfig[] = [
     },
   },
   {
+    id: 'fss',
+    name: '금융감독원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      // an official Open API also exists (보도자료 API) but requires a registered authKey --
+      // out of scope to sign up for autonomously (account/org registration). This plain board
+      // scrapes cleanly instead: real static HTML, single-purpose (no mixed categories the way
+      // kdca's list is).
+      url: 'https://www.fss.or.kr/fss/bbs/B0000188/list.do?menuNo=200218',
+      selectors: { item: 'tbody tr', title: 'td.title a', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
     id: 'kdca',
     name: '질병관리청',
     tier: 1,
@@ -161,6 +181,22 @@ export const SOURCES: SourceConfig[] = [
   { id: 'doctorsnews', name: '의협신문', rssUrl: 'https://www.doctorsnews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'kpanews', name: '약사공론', rssUrl: 'https://www.kpanews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'insweek', name: '보험신보', rssUrl: 'https://www.insweek.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  {
+    id: 'kha',
+    name: '대한병원협회',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.kha.or.kr/kha_home/press-release.do',
+      selectors: { item: 'div.tr', title: 'div.tb_03 a', date: 'div.tb_05' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
   {
     id: 'kiri',
     name: '보험연구원',
