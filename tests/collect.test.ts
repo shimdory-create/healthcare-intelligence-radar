@@ -2,12 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SourceConfig } from '@/lib/sources.config';
 
 const fetchSourceArticles = vi.fn();
+const fetchScrapedArticles = vi.fn();
 const getExistingUrls = vi.fn();
 const getExistingTitleDayKeys = vi.fn();
 const insertArticle = vi.fn();
+const syncSources = vi.fn();
+const recordSourceHealth = vi.fn();
 
 vi.mock('@/lib/rss', () => ({ fetchSourceArticles }));
-vi.mock('@/lib/db', () => ({ getExistingUrls, getExistingTitleDayKeys, insertArticle }));
+vi.mock('@/lib/scrape', () => ({ fetchScrapedArticles }));
+vi.mock('@/lib/db', () => ({ getExistingUrls, getExistingTitleDayKeys, insertArticle, syncSources, recordSourceHealth }));
 
 function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
   return {
@@ -22,10 +26,13 @@ function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
 }
 
 beforeEach(() => {
-  fetchSourceArticles.mockReset();
+  fetchSourceArticles.mockReset().mockResolvedValue([]);
+  fetchScrapedArticles.mockReset().mockResolvedValue([]);
   getExistingUrls.mockReset().mockResolvedValue(new Set());
   getExistingTitleDayKeys.mockReset().mockResolvedValue(new Set());
   insertArticle.mockReset().mockResolvedValue(true);
+  syncSources.mockReset().mockResolvedValue(undefined);
+  recordSourceHealth.mockReset().mockResolvedValue(undefined);
 });
 
 describe('collectSource tier-aware tag filtering', () => {
@@ -178,5 +185,31 @@ describe('collectSource batched dedup', () => {
 
     expect(summary.inserted).toBe(2);
     expect(summary.skippedDuplicate).toBe(0);
+  });
+});
+
+describe('collectAll source sync', () => {
+  it('syncs every configured source to the DB before collecting, so a newly added source is never left out of the FK-anchor table', async () => {
+    const { collectAll } = await import('@/lib/collect');
+    const { SOURCES } = await import('@/lib/sources.config');
+
+    const summaries = await collectAll();
+
+    expect(syncSources).toHaveBeenCalledTimes(1);
+    const synced = syncSources.mock.calls[0][0];
+    expect(synced.map((s: { id: string }) => s.id).sort()).toEqual(SOURCES.map((s) => s.id).sort());
+    expect(summaries).toHaveLength(SOURCES.length);
+  });
+
+  it('persists every source\'s result to source_health after collecting', async () => {
+    const { collectAll } = await import('@/lib/collect');
+    const { SOURCES } = await import('@/lib/sources.config');
+
+    const summaries = await collectAll();
+
+    expect(recordSourceHealth).toHaveBeenCalledTimes(1);
+    const recorded = recordSourceHealth.mock.calls[0][0];
+    expect(recorded).toEqual(summaries);
+    expect(recorded.map((s: { sourceId: string }) => s.sourceId).sort()).toEqual(SOURCES.map((s) => s.id).sort());
   });
 });

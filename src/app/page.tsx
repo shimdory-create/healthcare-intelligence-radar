@@ -85,9 +85,14 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <Link href="/" className="inline-block">
-        <h1 className="text-2xl font-semibold tracking-tight hover:underline">헬스케어 레이더</h1>
-      </Link>
+      <div className="flex items-baseline justify-between">
+        <Link href="/" className="inline-block">
+          <h1 className="text-2xl font-semibold tracking-tight hover:underline">헬스케어 레이더</h1>
+        </Link>
+        <Link href="/sources" className="text-muted-foreground text-xs hover:underline">
+          소스 상태 모니터링 →
+        </Link>
+      </div>
       <p className="text-muted-foreground mt-1 mb-1 text-sm">보도자료/뉴스 센싱 대시보드</p>
       <p className="text-muted-foreground mb-4 text-xs">
         {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low}) · 🤖 AI 분석완료 {counts.aiAnalyzed}건

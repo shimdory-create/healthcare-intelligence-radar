@@ -50,6 +50,146 @@ export async function getExistingTitleDayKeys(titleNorms: string[]): Promise<Set
   return keys;
 }
 
+export interface SourceSyncRow {
+  id: string;
+  name: string;
+  tier: number;
+  reliability: string;
+  fetchMethod: string;
+}
+
+/** upserts every row of sources.config.ts's SOURCES into the `sources` table in one round
+ *  trip -- articles.source_id has a foreign key against this table, so a source present in
+ *  the config but missing here has every one of its articles silently fail to insert (caught
+ *  per-source by collectSource's try/catch, easy to miss without the /sources monitoring
+ *  page). Found live 2026-09-18: 15 sources added across several commits were never synced
+ *  here manually, losing days of their articles before being caught -- called at the top of
+ *  collectAll() now so this can't recur. */
+export async function syncSources(sources: SourceSyncRow[]): Promise<void> {
+  if (sources.length === 0) return;
+  const rows = sources.map((s) => ({
+    id: s.id,
+    name: s.name,
+    tier: s.tier,
+    reliability: s.reliability,
+    fetch_method: s.fetchMethod,
+  }));
+  await sql`
+    insert into sources ${sql(rows, 'id', 'name', 'tier', 'reliability', 'fetch_method')}
+    on conflict (id) do update set
+      name = excluded.name,
+      tier = excluded.tier,
+      reliability = excluded.reliability,
+      fetch_method = excluded.fetch_method
+  `;
+}
+
+export interface SourceHealthUpdate {
+  sourceId: string;
+  fetched: number;
+  inserted: number;
+  skippedDuplicate: number;
+  skippedNoTagMatch: number;
+  skippedInvalidUrl: number;
+  error: string | null;
+}
+
+/** overwrites each source's row in source_health with its latest collectAll() result, in one
+ *  round trip -- consecutive_errors/consecutive_zero_fetch increment on the DB side (relative
+ *  to the row's PRIOR value) so a transient one-off failure doesn't look the same as a
+ *  multi-day streak on the /sources page. See source_health's schema.sql doc comment. */
+export async function recordSourceHealth(summaries: SourceHealthUpdate[]): Promise<void> {
+  if (summaries.length === 0) return;
+  const now = new Date();
+  const rows = summaries.map((s) => ({
+    source_id: s.sourceId,
+    last_run_at: now,
+    fetched: s.fetched,
+    inserted: s.inserted,
+    skipped_duplicate: s.skippedDuplicate,
+    skipped_no_tag_match: s.skippedNoTagMatch,
+    skipped_invalid_url: s.skippedInvalidUrl,
+    error: s.error,
+    consecutive_errors: s.error ? 1 : 0,
+    consecutive_zero_fetch: s.fetched === 0 ? 1 : 0,
+  }));
+  await sql`
+    insert into source_health ${sql(
+      rows,
+      'source_id',
+      'last_run_at',
+      'fetched',
+      'inserted',
+      'skipped_duplicate',
+      'skipped_no_tag_match',
+      'skipped_invalid_url',
+      'error',
+      'consecutive_errors',
+      'consecutive_zero_fetch',
+    )}
+    on conflict (source_id) do update set
+      last_run_at = excluded.last_run_at,
+      fetched = excluded.fetched,
+      inserted = excluded.inserted,
+      skipped_duplicate = excluded.skipped_duplicate,
+      skipped_no_tag_match = excluded.skipped_no_tag_match,
+      skipped_invalid_url = excluded.skipped_invalid_url,
+      error = excluded.error,
+      consecutive_errors = case when excluded.error is not null then source_health.consecutive_errors + 1 else 0 end,
+      consecutive_zero_fetch = case when excluded.fetched = 0 then source_health.consecutive_zero_fetch + 1 else 0 end
+  `;
+}
+
+export interface SourceHealthRow {
+  sourceId: string;
+  lastRunAt: Date;
+  fetched: number;
+  inserted: number;
+  skippedDuplicate: number;
+  skippedNoTagMatch: number;
+  skippedInvalidUrl: number;
+  error: string | null;
+  consecutiveErrors: number;
+  consecutiveZeroFetch: number;
+}
+
+/** every source's latest health row, most-recently-run first -- a source that has never
+ *  completed a collectAll() run (e.g. added to sources.config.ts but not yet deployed) simply
+ *  has no row here, which the /sources page renders as its own "no data yet" state. */
+export async function getSourceHealth(): Promise<SourceHealthRow[]> {
+  const rows = await sql`
+    select source_id, last_run_at, fetched, inserted, skipped_duplicate, skipped_no_tag_match,
+           skipped_invalid_url, error, consecutive_errors, consecutive_zero_fetch
+    from source_health
+    order by last_run_at desc
+  `;
+  return (
+    rows as unknown as {
+      source_id: string;
+      last_run_at: Date;
+      fetched: number;
+      inserted: number;
+      skipped_duplicate: number;
+      skipped_no_tag_match: number;
+      skipped_invalid_url: number;
+      error: string | null;
+      consecutive_errors: number;
+      consecutive_zero_fetch: number;
+    }[]
+  ).map((r) => ({
+    sourceId: r.source_id,
+    lastRunAt: r.last_run_at,
+    fetched: r.fetched,
+    inserted: r.inserted,
+    skippedDuplicate: r.skipped_duplicate,
+    skippedNoTagMatch: r.skipped_no_tag_match,
+    skippedInvalidUrl: r.skipped_invalid_url,
+    error: r.error,
+    consecutiveErrors: r.consecutive_errors,
+    consecutiveZeroFetch: r.consecutive_zero_fetch,
+  }));
+}
+
 export async function insertArticle(a: ArticleInsert): Promise<boolean> {
   const rows = await sql`
     insert into articles (source_id, title, url, title_norm, published_at, content_snippet, tags, score, priority)

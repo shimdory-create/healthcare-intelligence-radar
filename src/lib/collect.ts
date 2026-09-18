@@ -4,7 +4,7 @@ import { fetchScrapedArticles } from './scrape';
 import { normalizeTitle } from './normalize';
 import { matchTags } from './tagging';
 import { scoreToPriority } from './priority';
-import { getExistingUrls, getExistingTitleDayKeys, insertArticle } from './db';
+import { getExistingUrls, getExistingTitleDayKeys, insertArticle, syncSources, recordSourceHealth } from './db';
 
 export interface CollectionSummary {
   sourceId: string;
@@ -134,5 +134,15 @@ function collectSourceWithBudget(source: SourceConfig): Promise<CollectionSummar
 }
 
 export async function collectAll(): Promise<CollectionSummary[]> {
-  return Promise.all(SOURCES.map((source) => collectSourceWithBudget(source)));
+  // self-healing sync (see syncSources' doc comment) -- runs every call so a source added to
+  // sources.config.ts is never more than one collection cycle away from being insertable,
+  // instead of relying on someone remembering to update db/schema.sql by hand
+  await syncSources(
+    SOURCES.map((s) => ({ id: s.id, name: s.name, tier: s.tier, reliability: s.reliability, fetchMethod: s.fetchMethod })),
+  );
+  const summaries = await Promise.all(SOURCES.map((source) => collectSourceWithBudget(source)));
+  // persisted so /sources can show per-source health without anyone having to read a cron
+  // route's JSON response -- see recordSourceHealth's doc comment
+  await recordSourceHealth(summaries);
+  return summaries;
 }
