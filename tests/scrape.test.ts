@@ -154,6 +154,54 @@ describe('fetchScrapedArticles', () => {
     expect(articles).toHaveLength(1);
   });
 
+  it('extracts the article id from an onclick handler when href is a javascript: pseudo-URL', async () => {
+    // seen live on klia.or.kr: <a href="javascript:void(0);" onclick="fn_goView('123789',...)">
+    mockFetchHtml(`
+      <html><body>
+        <table><tbody>
+          <tr>
+            <td class="title">
+              <a href="javascript:void(0);" onclick="fn_goView('123789','2','1','')">생보협회 업무협약 체결</a>
+            </td>
+            <td>2026-09-16</td>
+          </tr>
+        </tbody></table>
+      </body></html>
+    `);
+    const source = makeSource({
+      scrape: {
+        url: 'https://www.klia.or.kr/board/2/list.do',
+        selectors: {
+          item: 'tbody tr',
+          title: 'td.title a',
+          onclick: { pattern: /fn_goView\('(\d+)'/, urlTemplate: (id) => `/board/2/view.do?boardNo=${id}` },
+        },
+      },
+    });
+
+    const articles = await fetchScrapedArticles(source);
+
+    expect(articles).toHaveLength(1);
+    expect(articles[0].url).toBe('https://www.klia.or.kr/board/2/view.do?boardNo=123789');
+  });
+
+  it('skips an item whose href is a javascript: pseudo-URL and no onclick config is given', async () => {
+    mockFetchHtml(`
+      <html><body>
+        <table><tbody>
+          <tr><td class="title"><a href="javascript:void(0);" onclick="fn_goView('123789')">제목</a></td></tr>
+        </tbody></table>
+      </body></html>
+    `);
+    const source = makeSource({
+      scrape: { url: 'https://example.com/board', selectors: { item: 'tbody tr', title: 'td.title a' } },
+    });
+
+    const articles = await fetchScrapedArticles(source);
+
+    expect(articles).toHaveLength(0);
+  });
+
   it('throws when the board page fetch itself fails', async () => {
     mockFetchHtml('', false);
     const source = makeSource({

@@ -44,8 +44,17 @@ export async function fetchScrapedArticles(source: SourceConfig): Promise<RawArt
       : item.tagName === 'A'
         ? item
         : item.querySelector('a');
-    const href = linkEl?.getAttribute('href');
-    if (!href) continue;
+    let href = linkEl?.getAttribute('href');
+
+    // some boards navigate via an onclick JS handler instead of a real href (seen live on
+    // klia.or.kr: href="javascript:void(0);" onclick="fn_goView('123789',...)") -- pull the
+    // article id out of onclick and build the real URL from the configured template
+    if ((!href || href.startsWith('javascript:')) && selectors.onclick) {
+      const onclickAttr = linkEl?.getAttribute('onclick') ?? '';
+      const match = onclickAttr.match(selectors.onclick.pattern);
+      if (match?.[1]) href = selectors.onclick.urlTemplate(match[1]);
+    }
+    if (!href || href.startsWith('javascript:')) continue;
 
     let absoluteUrl: string;
     try {

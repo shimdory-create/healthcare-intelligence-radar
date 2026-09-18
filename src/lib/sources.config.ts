@@ -11,6 +11,13 @@ export interface ScrapeSelectors {
   /** selects the anchor whose href is the article URL, relative to `item`. Defaults to `item`
    *  itself if it's an <a>, else the first <a> inside it. */
   link?: string;
+  /** for boards where the list "link" is really a JS onclick handler
+   *  (href="javascript:void(0);" onclick="fn_goView('123789',...)") rather than a real href
+   *  -- seen live on klia.or.kr. `pattern` is matched against the link element's `onclick`
+   *  attribute; its first capture group is the article id, passed to `urlTemplate` to build
+   *  the real (GET-able) article URL. Only used when the resolved href is missing or a
+   *  `javascript:` pseudo-URL. */
+  onclick?: { pattern: RegExp; urlTemplate: (id: string) => string };
   /** selects a date string, relative to `item`. Optional -- some board pages don't show one
    *  per row, in which case the article falls back to collection time (same as an RSS item
    *  with no parseable pubDate). */
@@ -97,4 +104,73 @@ export const SOURCES: SourceConfig[] = [
   { id: 'doctorsnews', name: '의협신문', rssUrl: 'https://www.doctorsnews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'kpanews', name: '약사공론', rssUrl: 'https://www.kpanews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'insweek', name: '보험신보', rssUrl: 'https://www.insweek.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  {
+    id: 'kiri',
+    name: '보험연구원',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.kiri.or.kr/community/materialList.do',
+      selectors: { item: 'table.list_tb tbody tr', title: 'td:nth-of-type(2) a', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'klia',
+    name: '생명보험협회',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.klia.or.kr/board/2/list.do',
+      selectors: {
+        item: 'tbody tr',
+        title: 'td.title a',
+        onclick: { pattern: /fn_goView\('(\d+)'/, urlTemplate: (id) => `/board/2/view.do?boardNo=${id}` },
+        date: 'td:nth-of-type(4)',
+      },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'knia',
+    name: '손해보험협회',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.knia.or.kr/data/news',
+      selectors: { item: 'tbody tr', title: 'td.title a', date: 'td:nth-of-type(3)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'dailypharm',
+    name: '데일리팜',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.dailypharm.com/user/news?group=%EC%A2%85%ED%95%A9',
+      selectors: { item: 'li a[href*="/user/news/"]', title: '.lin_title', date: '.lin_data div:first-child' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+09:00`);
+      },
+    },
+  },
 ];
