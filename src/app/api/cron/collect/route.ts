@@ -8,6 +8,7 @@ import {
   getDuplicatesOf,
   getAppSetting,
   setAppSetting,
+  recordPipelineRun,
   type ArticleRow,
   type PriorityCounts,
 } from '@/lib/db';
@@ -199,6 +200,17 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+
+  await recordPipelineRun({
+    route: 'collect',
+    startedAt: new Date(routeStart),
+    finishedAt: new Date(),
+    aiResult: ai,
+    dedupeResult: dedupe,
+    reportResult: report,
+    emailResult: email,
+    kakaoResult: kakao,
+  }).catch(() => {});
 
   return NextResponse.json({ summary, email, kakao, ai, dedupe, report });
 }

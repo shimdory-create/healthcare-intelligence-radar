@@ -89,8 +89,8 @@ export default async function HomePage({
         <Link href="/" className="inline-block">
           <h1 className="text-2xl font-semibold tracking-tight hover:underline">헬스케어 레이더</h1>
         </Link>
-        <Link href="/sources" className="text-muted-foreground text-xs hover:underline">
-          소스 상태 모니터링 →
+        <Link href="/monitoring" className="text-muted-foreground text-xs hover:underline">
+          파이프라인 모니터링 →
         </Link>
       </div>
       <p className="text-muted-foreground mt-1 mb-1 text-sm">보도자료/뉴스 센싱 대시보드</p>

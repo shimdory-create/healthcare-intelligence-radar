@@ -72,6 +72,26 @@ create table if not exists source_health (
   consecutive_zero_fetch int not null default 0
 );
 
+-- one row per cron route invocation (both /api/cron/collect and /api/cron/enrich) -- unlike
+-- source_health (per source, latest run only), this is an append-only log so /monitoring can
+-- show whether AI analysis and the once-daily report/send step are actually succeeding over
+-- time, not just collection. See recordPipelineRun in src/lib/db.ts.
+create table if not exists pipeline_runs (
+  id serial primary key,
+  route text not null,
+  started_at timestamptz not null,
+  finished_at timestamptz not null,
+  ai_result text,
+  dedupe_result text,
+  -- null for an 'enrich' run -- only the once-daily 'collect' route reaches report/send
+  report_result text,
+  email_result text,
+  kakao_result text,
+  has_error boolean not null default false
+);
+
+create index if not exists idx_pipeline_runs_started_at on pipeline_runs (started_at desc);
+
 -- optional AI enrichment (Gemini free tier). Every collected article is analyzed (or
 -- re-analyzed only if its content_hash changed since last time, so an unchanged article
 -- never re-spends quota); its priority band here is copied onto articles.priority,

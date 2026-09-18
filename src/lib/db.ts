@@ -615,3 +615,83 @@ export async function saveAiAnalysis(a: Omit<AiAnalysis, 'analyzedAt'>): Promise
       analyzed_at = excluded.analyzed_at
   `;
 }
+
+export interface PipelineRunRecord {
+  /** 'collect' = the once-daily 07:00 KST route (collect + AI + dedupe + report + send).
+   *  'enrich' = the several-times-a-day intraday route (collect + AI + dedupe only). */
+  route: 'collect' | 'enrich';
+  startedAt: Date;
+  finishedAt: Date;
+  aiResult?: string | null;
+  dedupeResult?: string | null;
+  /** null for an 'enrich' run -- only 'collect' reaches the report/send phase */
+  reportResult?: string | null;
+  emailResult?: string | null;
+  kakaoResult?: string | null;
+}
+
+function looksLikeError(s: string | null | undefined): boolean {
+  return typeof s === 'string' && s.startsWith('error');
+}
+
+/** appends one row per cron route invocation (not per source -- see source_health for that) so
+ *  the /monitoring page can show whether AI analysis and the report/send step are actually
+ *  succeeding, not just collection. Failing to record a run must never break the route's real
+ *  response, so callers wrap this in .catch(() => {}). */
+export async function recordPipelineRun(r: PipelineRunRecord): Promise<void> {
+  const hasError = [r.aiResult, r.dedupeResult, r.reportResult, r.emailResult, r.kakaoResult].some(looksLikeError);
+  await sql`
+    insert into pipeline_runs
+      (route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, has_error)
+    values
+      (${r.route}, ${r.startedAt}, ${r.finishedAt}, ${r.aiResult ?? null}, ${r.dedupeResult ?? null},
+       ${r.reportResult ?? null}, ${r.emailResult ?? null}, ${r.kakaoResult ?? null}, ${hasError})
+  `;
+}
+
+export interface PipelineRunRow {
+  id: number;
+  route: string;
+  startedAt: Date;
+  finishedAt: Date;
+  aiResult: string | null;
+  dedupeResult: string | null;
+  reportResult: string | null;
+  emailResult: string | null;
+  kakaoResult: string | null;
+  hasError: boolean;
+}
+
+export async function getRecentPipelineRuns(limit = 20): Promise<PipelineRunRow[]> {
+  const rows = await sql`
+    select id, route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, has_error
+    from pipeline_runs
+    order by started_at desc
+    limit ${limit}
+  `;
+  return (
+    rows as unknown as {
+      id: number;
+      route: string;
+      started_at: Date;
+      finished_at: Date;
+      ai_result: string | null;
+      dedupe_result: string | null;
+      report_result: string | null;
+      email_result: string | null;
+      kakao_result: string | null;
+      has_error: boolean;
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    route: r.route,
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
+    aiResult: r.ai_result,
+    dedupeResult: r.dedupe_result,
+    reportResult: r.report_result,
+    emailResult: r.email_result,
+    kakaoResult: r.kakao_result,
+    hasError: r.has_error,
+  }));
+}

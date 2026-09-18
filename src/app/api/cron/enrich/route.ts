@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collectAll } from '@/lib/collect';
-import { getRecentArticles, getLatestCollectionDate } from '@/lib/db';
+import { getRecentArticles, getLatestCollectionDate, recordPipelineRun } from '@/lib/db';
 import { enrichArticles } from '@/lib/aiEnrichment';
 import { demoteDuplicatePriorities } from '@/lib/duplicates';
 import { isNonBusinessDay } from '@/lib/holidays';
@@ -52,6 +52,14 @@ export async function GET(req: NextRequest) {
       .then((r) => `demoted ${r.demoted} across ${r.groups} groups`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
   }
+
+  await recordPipelineRun({
+    route: 'enrich',
+    startedAt: new Date(routeStart),
+    finishedAt: new Date(),
+    aiResult: ai,
+    dedupeResult: dedupe,
+  }).catch(() => {});
 
   return NextResponse.json({ summary, ai, dedupe });
 }
