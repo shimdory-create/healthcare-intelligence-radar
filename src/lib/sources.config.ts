@@ -31,8 +31,14 @@ export const SOURCES: SourceConfig[] = [
   { id: 'edaily', name: '이데일리', rssUrl: 'https://rss.edaily.co.kr/economy_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'sedaily', name: '서울경제', rssUrl: 'https://www.sedaily.com/rss/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'joongang', name: '중앙일보', rssUrl: 'https://news.google.com/rss/search?q=site:joongang.co.kr+when:1d&hl=ko&gl=KR&ceid=KR:ko', tier: 2, reliability: 'experimental', fetchMethod: 'google_news_rss' },
+  { id: 'ajunews', name: '아주경제', rssUrl: 'https://www.ajunews.com/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'kmib', name: '국민일보', rssUrl: 'https://www.kmib.co.kr/rss/data/kmibRssAll.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'mt', name: '머니투데이', rssUrl: 'https://rss.mt.co.kr/mt_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'newsis', name: '뉴시스', rssUrl: 'https://www.newsis.com/RSS/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'einfomax', name: '연합인포맥스', rssUrl: 'https://news.einfomax.co.kr/rss/allArticle.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'sisajournale', name: '시사저널e', rssUrl: 'https://www.sisajournal-e.com/rss/allArticle.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
 
-  // Tier 3 — 헬스케어 전문지
+  // Tier 3 — 헬스케어/보험 전문지
   { id: 'docdocdoc', name: '청년의사', rssUrl: 'https://www.docdocdoc.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'hitnews', name: '히트뉴스', rssUrl: 'https://www.hitnews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'rapportian', name: '라포르시안', rssUrl: 'http://www.rapportian.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
@@ -41,4 +47,8 @@ export const SOURCES: SourceConfig[] = [
   { id: 'monews', name: '메디칼업저버', rssUrl: 'http://www.monews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'pharmnews', name: '팜뉴스', rssUrl: 'https://www.pharmnews.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'healthchosun', name: '헬스조선', rssUrl: 'https://health.chosun.com/site/data/rss/rss.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'medipana', name: '메디파나뉴스', rssUrl: 'https://www.medipana.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'doctorsnews', name: '의협신문', rssUrl: 'https://www.doctorsnews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'kpanews', name: '약사공론', rssUrl: 'https://www.kpanews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'insweek', name: '보험신보', rssUrl: 'https://www.insweek.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
 ];
