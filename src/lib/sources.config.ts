@@ -174,6 +174,11 @@ export const SOURCES: SourceConfig[] = [
   { id: 'sisajournale', name: '시사저널e', rssUrl: 'https://www.sisajournal-e.com/rss/allArticle.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   // 원래 언론사 전수조사 때 누락됐던 것을 사용자가 지적해서 추가 (2026-09-18)
   { id: 'fnnews', name: '파이낸셜뉴스', rssUrl: 'https://www.fnnews.com/rss/r20/fn_realnews_economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'asiae', name: '아시아경제', rssUrl: 'https://www.asiae.co.kr/news/rss/asia_rss.htm', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'chosunbiz', name: '조선비즈', rssUrl: 'https://biz.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'khan', name: '경향신문', rssUrl: 'https://www.khan.co.kr/rss/rssdata/total_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'seoul', name: '서울신문', rssUrl: 'https://www.seoul.co.kr/xml/rss/google_top.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'segye', name: '세계일보', rssUrl: 'https://www.segye.com/Articles/RSSList/segye_recent.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
 
   // Tier 3 — 헬스케어/보험 전문지
   { id: 'docdocdoc', name: '청년의사', rssUrl: 'https://www.docdocdoc.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
@@ -184,6 +189,9 @@ export const SOURCES: SourceConfig[] = [
   { id: 'monews', name: '메디칼업저버', rssUrl: 'http://www.monews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'pharmnews', name: '팜뉴스', rssUrl: 'https://www.pharmnews.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'healthchosun', name: '헬스조선', rssUrl: 'https://health.chosun.com/site/data/rss/rss.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  // 재조사(2026-09-18, Daum 제휴 언론사 목록 대조)로 발견된 두 곳 -- 원래 전수조사 때 누락됐음
+  { id: 'hidoc', name: '하이닥', rssUrl: 'https://news.hidoc.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
+  { id: 'jhealthmedia', name: '헬스중앙', rssUrl: 'https://jhealthmedia.joins.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'medipana', name: '메디파나뉴스', rssUrl: 'https://www.medipana.com/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'doctorsnews', name: '의협신문', rssUrl: 'https://www.doctorsnews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'kpanews', name: '약사공론', rssUrl: 'https://www.kpanews.co.kr/rss/allArticle.xml', tier: 3, reliability: 'stable', fetchMethod: 'rss' },
