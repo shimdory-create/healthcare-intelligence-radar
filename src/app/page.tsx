@@ -80,7 +80,7 @@ export default async function HomePage({
   const basisLabel = isAllTime
     ? '전체 기간'
     : collectedDate === latestDate && lastCollectedAt
-      ? `${formatKstDate(collectedDate)} · ${lastCollectedAt.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })} 수집`
+      ? `${formatKstDate(collectedDate)} · ${lastCollectedAt.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit' })} 수집`
       : `${formatKstDate(collectedDate!)} 수집분`;
 
   return (
