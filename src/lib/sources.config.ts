@@ -149,6 +149,93 @@ export const SOURCES: SourceConfig[] = [
       },
     },
   },
+  {
+    // 기관 재조사(2026-09-18, 보건복지부 산하 공공기관 29개 목록 대조)로 추가
+    id: 'nmc',
+    name: '국립중앙의료원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.nmc.or.kr/nmc/board/B0000008',
+      selectors: { item: 'div.post_list_basic tbody tr', title: 'td.post_title a', date: 'td:nth-of-type(3)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'khepi',
+    name: '한국건강증진개발원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      // needs the exact query string the site's own board link uses (menuId+siteId) -- a bare
+      // /board path 404s. Verified a single cookie-less fetch to this URL works standalone
+      // despite the site setting a session cookie on its /menu page first.
+      url: 'https://www.khepi.or.kr/board?menuId=MENU00907&siteId=null-',
+      selectors: { item: 'tbody tr', title: 'td.ellipsis a', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'neca',
+    name: '한국보건의료연구원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.neca.re.kr/lay1/bbs/S1T12C38/F/38/list.do',
+      selectors: { item: 'tbody tr', title: 'td.left a', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'khis',
+    name: '한국보건의료정보원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.khis.kr/board.es?mid=a10315000000&bid=0038',
+      selectors: { item: 'tbody#listView tr', title: 'td.title a', date: 'td:nth-of-type(4)' },
+      parseDate: (raw) => {
+        // this site's date td carries a sr-only "등록일" accessibility label glued onto the
+        // actual date text ("등록일2026/09/17") -- unanchored match instead of requiring the
+        // whole trimmed string to be just the date
+        const m = raw.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'kmedi',
+    name: '한국의료분쟁조정중재원',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://www.k-medi.or.kr/web/lay1/bbs/S1T13C24/A/2/list.do',
+      selectors: { item: 'tbody tr', title: 'td.tit.left a', date: 'span._targetDate' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
 
   // Tier 2 — 종합/경제지
   { id: 'yna', name: '연합뉴스', rssUrl: 'https://www.yna.co.kr/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
@@ -260,6 +347,24 @@ export const SOURCES: SourceConfig[] = [
       selectors: { item: 'tbody tr', title: 'td.title a', date: 'td:nth-of-type(3)' },
       parseDate: (raw) => {
         const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
+  {
+    id: 'kicaa',
+    name: '한국손해사정사회',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://kicaa.or.kr/new/board/board_list.html?code=2',
+      // title link sits in a <th>, not a <td> -- this board's row markup uses <th> for the
+      // title cell specifically (an accessibility/semantic choice, not a typo)
+      selectors: { item: 'table.bbs_tbl tbody tr', title: 'th a', date: 'td:nth-of-type(2)' },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
         if (!m) return null;
         return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
       },
