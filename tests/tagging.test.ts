@@ -36,6 +36,13 @@ describe('matchTags', () => {
     expect(result.tags).toContain('언더라이팅');
   });
 
+  it('matches 삼성서울병원/강북삼성병원 as strong tags, so mentions are never filtered out or scored weak', () => {
+    const result = matchTags('삼성서울병원, 강북삼성병원과 공동 연구 협약 체결');
+    expect(result.tags).toContain('삼성서울병원');
+    expect(result.tags).toContain('강북삼성병원');
+    expect(result.score).toBeGreaterThan(0);
+  });
+
   it('excludeKeywords prevents a known false-positive substring from matching', () => {
     const cancerTag: TagDefinition[] = [{ tag: '암', keywords: ['암'], excludeKeywords: ['암호'] }];
     const result = matchTags('티빙, 접속키 암호화 안해…계정 정보 유출', cancerTag);

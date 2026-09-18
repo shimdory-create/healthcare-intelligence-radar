@@ -377,10 +377,19 @@ export interface CandidateRow {
   outletSourceIds: string[];
 }
 
+// articles tagged with either of these always become report candidates regardless of
+// priority/outlet count (see getReportCandidates) -- user request 2026-09-18, so coverage of
+// these two hospitals is never silently dropped by the normal high/multi-outlet gate. When
+// neither is otherwise high-priority nor multi-outlet, Gemini's own is_reference judgment
+// (buildDeepPrompt) typically renders it with a "(참고)" prefix, matching the "참고 수준으로
+// 꼭 담을 것" ask.
+const ALWAYS_INCLUDE_TAGS = ['삼성서울병원', '강북삼성병원'];
+
 /** candidates for the deep-analysis report pass: every 'high' survivor, plus every
  *  survivor (regardless of its own priority) whose duplicate group spans 3+ distinct outlets
  *  (its own source plus 2 or more other distinct sources among its grouped duplicates -- the
- *  same outlet posting a follow-up to its own story doesn't count as a second outlet).
+ *  same outlet posting a follow-up to its own story doesn't count as a second outlet), plus
+ *  every survivor tagged with one of ALWAYS_INCLUDE_TAGS regardless of priority/outlet count.
  *  `collectedDates` lets a rollup day's report cover more than one calendar date in one call
  *  (see reportSchedule.ts). */
 export async function getReportCandidates(collectedDates: string[]): Promise<CandidateRow[]> {
@@ -402,6 +411,7 @@ export async function getReportCandidates(collectedDates: string[]): Promise<Can
       and (
         a.priority = 'high'
         or coalesce(array_length(o.outlet_source_ids, 1), 1) >= 3
+        or a.tags && ${ALWAYS_INCLUDE_TAGS}
       )
     order by a.id
   `;

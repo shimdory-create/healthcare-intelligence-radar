@@ -45,4 +45,9 @@ export const TAGS: TagDefinition[] = [
   { tag: '플랫폼', keywords: ['플랫폼'], weak: true },
   { tag: '정신건강', keywords: ['정신건강', '정신질환', '우울증'] },
   { tag: '마이데이터', keywords: ['마이데이터'] },
+  // 명시적으로 항상 수집·최소 medium 우선순위·리포트 포함 대상으로 지정된 두 병원
+  // (사용자 요청, 2026-09-18) -- gemini.ts의 우선순위 규칙, db.ts의
+  // getReportCandidates 항상-포함 조건과 함께 적용됨
+  { tag: '삼성서울병원', keywords: ['삼성서울병원'] },
+  { tag: '강북삼성병원', keywords: ['강북삼성병원'] },
 ];
