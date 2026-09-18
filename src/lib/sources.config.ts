@@ -72,6 +72,38 @@ export const SOURCES: SourceConfig[] = [
       },
     },
   },
+  {
+    id: 'kdca',
+    name: '질병관리청',
+    tier: 1,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      // this "보도자료(전체)" page's table is actually a site-wide recent-posts widget mixed
+      // across several sub-boards (press releases, procurement notices, recruitment, regional
+      // center notices, ...), not a clean single board -- no cleaner canonical list URL exists
+      // (multiple bare /bbs/kdca/{id}/artclList.do board endpoints tried, all return 0 items;
+      // RSS confirmed unsupported via /bbs/kdca/{id}/rssList.do). Accepting the occasional
+      // off-topic item since KDCA is a whitelisted tier-1 institution and this is still the
+      // most complete feed available.
+      url: 'https://www.kdca.go.kr/kdca/2847/subview.do',
+      selectors: {
+        item: 'tbody tr',
+        title: 'td.td-title a',
+        // every row's link is href="javascript:jf_viewArtcl('kdca','41','312672')" -- board id
+        // in the call is always the literal '41' regardless of the item's real sub-board, but
+        // '41' turns out to be a working universal router (verified live: /bbs/kdca/41/{id}/
+        // artclView.do resolves to the correct article for a row whose real board is 42/43/...)
+        onclick: { pattern: /jf_viewArtcl\('kdca',\s*'\d+',\s*'(\d+)'\)/, urlTemplate: (id) => `/bbs/kdca/41/${id}/artclView.do?layout=unknown` },
+        date: 'td.td-date',
+      },
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
+      },
+    },
+  },
 
   // Tier 2 — 종합/경제지
   { id: 'yna', name: '연합뉴스', rssUrl: 'https://www.yna.co.kr/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },

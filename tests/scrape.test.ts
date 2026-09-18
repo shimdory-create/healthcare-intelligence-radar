@@ -185,6 +185,38 @@ describe('fetchScrapedArticles', () => {
     expect(articles[0].url).toBe('https://www.klia.or.kr/board/2/view.do?boardNo=123789');
   });
 
+  it('extracts the article id when the JS call is embedded directly in href (no separate onclick attribute)', async () => {
+    // seen live on kdca.go.kr: <a href="javascript:jf_viewArtcl('kdca','41','312672')">
+    mockFetchHtml(`
+      <html><body>
+        <table><tbody>
+          <tr>
+            <td class="td-title"><a href="javascript:jf_viewArtcl('kdca', '41', '312672')">질병관리청 보도자료 제목</a></td>
+            <td class="td-date">2026.09.18</td>
+          </tr>
+        </tbody></table>
+      </body></html>
+    `);
+    const source = makeSource({
+      scrape: {
+        url: 'https://www.kdca.go.kr/kdca/2847/subview.do',
+        selectors: {
+          item: 'tbody tr',
+          title: 'td.td-title a',
+          onclick: {
+            pattern: /jf_viewArtcl\('kdca',\s*'\d+',\s*'(\d+)'\)/,
+            urlTemplate: (id) => `/bbs/kdca/41/${id}/artclView.do?layout=unknown`,
+          },
+        },
+      },
+    });
+
+    const articles = await fetchScrapedArticles(source);
+
+    expect(articles).toHaveLength(1);
+    expect(articles[0].url).toBe('https://www.kdca.go.kr/bbs/kdca/41/312672/artclView.do?layout=unknown');
+  });
+
   it('skips an item whose href is a javascript: pseudo-URL and no onclick config is given', async () => {
     mockFetchHtml(`
       <html><body>
