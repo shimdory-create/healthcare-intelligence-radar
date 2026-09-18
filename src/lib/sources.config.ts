@@ -262,7 +262,9 @@ export const SOURCES: SourceConfig[] = [
   // 원래 언론사 전수조사 때 누락됐던 것을 사용자가 지적해서 추가 (2026-09-18)
   { id: 'fnnews', name: '파이낸셜뉴스', rssUrl: 'https://www.fnnews.com/rss/r20/fn_realnews_economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'asiae', name: '아시아경제', rssUrl: 'https://www.asiae.co.kr/news/rss/asia_rss.htm', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
-  { id: 'chosunbiz', name: '조선비즈', rssUrl: 'https://biz.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  // found live 2026-09-18: the category/economy feed returns valid but permanently empty XML
+  // (0 <item>s) -- switched to the site-wide feed, which has real content (100 items verified)
+  { id: 'chosunbiz', name: '조선비즈', rssUrl: 'https://biz.chosun.com/arc/outboundfeeds/rss/?outputType=xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'khan', name: '경향신문', rssUrl: 'https://www.khan.co.kr/rss/rssdata/total_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'seoul', name: '서울신문', rssUrl: 'https://www.seoul.co.kr/xml/rss/google_top.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'segye', name: '세계일보', rssUrl: 'https://www.segye.com/Articles/RSSList/segye_recent.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
