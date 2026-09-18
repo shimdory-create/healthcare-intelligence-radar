@@ -158,7 +158,12 @@ export const SOURCES: SourceConfig[] = [
   { id: 'hankyung', name: '한국경제', rssUrl: 'https://www.hankyung.com/feed/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'mk', name: '매일경제', rssUrl: 'https://www.mk.co.kr/rss/30100041/', tier: 2, reliability: 'stable', fetchMethod: 'rss', requiresBrowserUA: true },
   { id: 'herald', name: '헤럴드경제', rssUrl: 'https://biz.heraldcorp.com/rss/google/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
-  { id: 'edaily', name: '이데일리', rssUrl: 'https://rss.edaily.co.kr/economy_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  // rss.edaily.co.kr's HTTPS listener has a broken TLS handshake (confirmed with openssl
+  // s_client directly, not a Node/client issue) -- found live 2026-09-18 after this source hit
+  // 8/8 consecutive collectAll() failures. The old economy-specific feed also 404s; this is
+  // edaily's current all-news feed (plain HTTP, found via the RSS link on edaily.co.kr's own
+  // homepage), which sidesteps the broken TLS entirely.
+  { id: 'edaily', name: '이데일리', rssUrl: 'http://rss.edaily.co.kr/edaily_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'sedaily', name: '서울경제', rssUrl: 'https://www.sedaily.com/rss/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'joongang', name: '중앙일보', rssUrl: 'https://news.google.com/rss/search?q=site:joongang.co.kr+when:1d&hl=ko&gl=KR&ceid=KR:ko', tier: 2, reliability: 'experimental', fetchMethod: 'google_news_rss' },
   { id: 'ajunews', name: '아주경제', rssUrl: 'https://www.ajunews.com/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },

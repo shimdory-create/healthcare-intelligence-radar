@@ -58,7 +58,13 @@ export async function fetchSourceArticles(source: SourceConfig): Promise<RawArti
     headers['User-Agent'] = BROWSER_USER_AGENT;
   }
 
-  const res = await fetch(source.rssUrl, { headers, signal: AbortSignal.timeout(15000) });
+  // 25s, not 15s -- fsc.go.kr (a government site) responded in ~2.4s from this dev environment
+  // but consistently timed out at 15s from Vercel's network path (found live 2026-09-18: 8/8
+  // consecutive failures with "The operation was aborted due to timeout"), suggesting real but
+  // higher latency from that specific egress route rather than the site being genuinely down.
+  // Each source has its own independent 120s budget in collect.ts (collectAll runs sources
+  // concurrently), so this has no effect on other sources' budgets.
+  const res = await fetch(source.rssUrl, { headers, signal: AbortSignal.timeout(25000) });
   if (!res.ok) {
     throw new Error(`fetch failed for ${source.id}: HTTP ${res.status}`);
   }
