@@ -1,5 +1,5 @@
 export type SourceTier = 1 | 2 | 3;
-export type FetchMethod = 'rss' | 'google_news_rss' | 'html_scrape';
+export type FetchMethod = 'rss' | 'google_news_rss' | 'html_scrape' | 'json_scrape';
 export type Reliability = 'stable' | 'experimental';
 
 /** CSS selectors describing one board/list page's repeating item structure -- see scrape.ts. */
@@ -35,11 +35,34 @@ export interface ScrapeConfig {
   parseDate?: (raw: string) => Date | null;
 }
 
+/** some board list pages are a client-rendered SPA with nothing in the static HTML (seen live
+ *  on kpbma.or.kr) -- but the SPA still calls a plain JSON API to fetch its list, found via the
+ *  browser's network log, which is what this config points at instead of the HTML page. See
+ *  jsonScrape.ts. */
+export interface JsonScrapeConfig {
+  /** the JSON API endpoint the site's own frontend calls for its list -- found via the
+   *  browser's network log while browsing the site, not a documented public API */
+  url: string;
+  /** dot-separated path to the array of items within the parsed JSON response (e.g. "data") */
+  itemsPath: string;
+  /** field name (within each item) holding the title */
+  titleField: string;
+  /** field name (within each item) holding the article's id */
+  idField: string;
+  /** builds the real, GET-able article URL from that item's id field value */
+  urlTemplate: (id: string) => string;
+  /** field name (within each item) holding a date string, if any */
+  dateField?: string;
+  /** parses this site's own date-string format into a Date, or null if unparseable -- see
+   *  ScrapeConfig.parseDate's doc comment for why this isn't standardized */
+  parseDate?: (raw: string) => Date | null;
+}
+
 export interface SourceConfig {
   id: string;
   name: string;
-  /** required for fetchMethod 'rss'/'google_news_rss'. Scrape sources use `scrape.url`
-   *  instead -- optional here so a scrape-only source doesn't need a meaningless placeholder. */
+  /** required for fetchMethod 'rss'/'google_news_rss'. Scrape sources use `scrape.url` or
+   *  `jsonScrape.url` instead -- optional here so those don't need a meaningless placeholder. */
   rssUrl?: string;
   tier: SourceTier;
   reliability: Reliability;
@@ -47,6 +70,8 @@ export interface SourceConfig {
   requiresBrowserUA?: boolean;
   /** required for fetchMethod 'html_scrape' -- see scrape.ts */
   scrape?: ScrapeConfig;
+  /** required for fetchMethod 'json_scrape' -- see jsonScrape.ts */
+  jsonScrape?: JsonScrapeConfig;
 }
 
 export const SOURCES: SourceConfig[] = [
@@ -202,6 +227,29 @@ export const SOURCES: SourceConfig[] = [
         const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
         if (!m) return null;
         return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+09:00`);
+      },
+    },
+  },
+  {
+    id: 'kpbma',
+    name: '한국제약바이오협회',
+    tier: 3,
+    reliability: 'stable',
+    fetchMethod: 'json_scrape',
+    jsonScrape: {
+      // the list page (/multimedia/pressRelease/list) is a client-rendered SPA with nothing in
+      // the static HTML -- this is the plain JSON API its own frontend calls, found via the
+      // browser's network log
+      url: 'https://www.kpbma.or.kr/api/multimedia/pressRelease/lists?start=0&search_txt=&b_subject=&startDate=&endDate=&b_content=&b_m_name=',
+      itemsPath: 'data',
+      titleField: 'b_subject',
+      idField: 'b_idx',
+      urlTemplate: (id) => `/multimedia/pressRelease/select/${id}`,
+      dateField: 'b_regdate',
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+        if (!m) return null;
+        return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
       },
     },
   },

@@ -3,6 +3,7 @@ import type { SourceConfig } from '@/lib/sources.config';
 
 const fetchSourceArticles = vi.fn();
 const fetchScrapedArticles = vi.fn();
+const fetchJsonScrapedArticles = vi.fn();
 const getExistingUrls = vi.fn();
 const getExistingTitleDayKeys = vi.fn();
 const insertArticle = vi.fn();
@@ -11,6 +12,7 @@ const recordSourceHealth = vi.fn();
 
 vi.mock('@/lib/rss', () => ({ fetchSourceArticles }));
 vi.mock('@/lib/scrape', () => ({ fetchScrapedArticles }));
+vi.mock('@/lib/jsonScrape', () => ({ fetchJsonScrapedArticles }));
 vi.mock('@/lib/db', () => ({ getExistingUrls, getExistingTitleDayKeys, insertArticle, syncSources, recordSourceHealth }));
 
 function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
@@ -28,6 +30,7 @@ function makeSource(overrides: Partial<SourceConfig>): SourceConfig {
 beforeEach(() => {
   fetchSourceArticles.mockReset().mockResolvedValue([]);
   fetchScrapedArticles.mockReset().mockResolvedValue([]);
+  fetchJsonScrapedArticles.mockReset().mockResolvedValue([]);
   getExistingUrls.mockReset().mockResolvedValue(new Set());
   getExistingTitleDayKeys.mockReset().mockResolvedValue(new Set());
   insertArticle.mockReset().mockResolvedValue(true);
