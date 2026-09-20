@@ -291,6 +291,14 @@ export const SOURCES: SourceConfig[] = [
   // page content, verified >100 items each.
   { id: 'inews24', name: '아이뉴스24', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/031', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   { id: 'dailian', name: '데일리안', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/119', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  // continuing the 2026-09-20 sweep of the "checked and skipped, no RSS" list -- press codes
+  // found via Naver News search results (site name -> article oid -> confirmed against the
+  // press page's own branding text, not just a raw substring match, to rule out false
+  // positives like a rival outlet's headline merely mentioning the name).
+  { id: 'news1', name: '뉴스1', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/421', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'munhwa', name: '문화일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/021', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'nocutnews', name: '노컷뉴스', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/079', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'hankookilbo', name: '한국일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/469', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   // rss.edaily.co.kr's HTTPS listener has a broken TLS handshake (confirmed with openssl
   // s_client directly, not a Node/client issue) -- found live 2026-09-18 after this source hit
   // 8/8 consecutive collectAll() failures. The old economy-specific feed also 404s; this is
