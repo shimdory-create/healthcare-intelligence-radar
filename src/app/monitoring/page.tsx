@@ -44,10 +44,13 @@ const ROUTE_LABELS: Record<string, string> = {
 // other three, which are confirmed and accepted as unfixable from app code. See
 // project_source_coverage_and_monitoring.md for the full diagnosis of each.
 const KNOWN_ISSUES: Record<string, string> = {
-  hankyung: '원인 파악됨: Vercel 아웃바운드 IP 차단(2026-09-18 확인) — 앱 코드로 해결 불가, 수용',
-  khidi: '원인 파악됨: hankyung과 동일한 Vercel IP 차단 패턴(2026-09-18 확인) — 수용',
+  khidi: '원인 파악됨: Vercel 아웃바운드 IP 차단(2026-09-18 확인, hankyung과 동일 패턴) — 수용',
   joongang: '원인 파악됨: 구글뉴스 RSS 경유 실험적 소스라 저수율 — 알려진 한계, 수용',
   kicaa: '원인 미파악: 로컬에선 정상인데 프로덕션에서만 간헐적 0건 — 모니터링 중',
+  // hankyung intentionally has NO entry here -- 2026-09-20, switched from its own (blocked)
+  // RSS to scraping its official Naver News channel instead (see sources.config.ts). This is
+  // a genuine fix attempt, not yet confirmed live -- if it starts failing again, that's new
+  // information worth looking at fresh, not something to wave off as the old accepted issue.
 };
 
 function StageCell({ value }: { value: string | null }) {

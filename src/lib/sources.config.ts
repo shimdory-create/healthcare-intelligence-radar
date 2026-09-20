@@ -242,7 +242,36 @@ export const SOURCES: SourceConfig[] = [
   { id: 'chosun', name: '조선일보', rssUrl: 'https://www.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'donga', name: '동아일보', rssUrl: 'http://rss.donga.com/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'hani', name: '한겨레', rssUrl: 'https://www.hani.co.kr/rss/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
-  { id: 'hankyung', name: '한국경제', rssUrl: 'https://www.hankyung.com/feed/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  {
+    // hankyung.com's own RSS 403s every request from Vercel's egress IPs specifically (clean
+    // from local dev, confirmed via openssl/curl -- a WAF-level block, not fixable from app
+    // code, see project memory). Routes around it entirely by scraping the outlet's own
+    // official Naver News channel page instead -- hankyung syndicates there itself (its own
+    // site links to it as "보러가기"), so this is the same articles via a different, much
+    // larger host that has no reason to block generic cloud IPs the way one mid-size outlet's
+    // WAF apparently does. Verified live 2026-09-20: 183 article items in one static fetch,
+    // sample article page 200/280KB (Readability-extractable).
+    id: 'hankyung',
+    name: '한국경제',
+    tier: 2,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: {
+      url: 'https://media.naver.com/press/015',
+      selectors: { item: 'li.press_edit_news_item', title: '.press_edit_news_title', link: 'a.press_edit_news_link', date: '.r_ico_b b' },
+      // this page shows relative Korean time text ("47분전"/"3시간전"/"1일전"), not an
+      // absolute date -- compute back from scrape time. Coarser than a real timestamp (day-level
+      // once an item passes 24h) but good enough for same-day report/digest sorting, and no
+      // worse than falling back to collection time (the no-date default every other source
+      // gets when a list page has none at all).
+      parseDate: (raw) => {
+        const m = raw.trim().match(/^(\d+)(분|시간|일)전$/);
+        if (!m) return null;
+        const unitMs = m[2] === '분' ? 60_000 : m[2] === '시간' ? 3_600_000 : 86_400_000;
+        return new Date(Date.now() - Number(m[1]) * unitMs);
+      },
+    },
+  },
   { id: 'mk', name: '매일경제', rssUrl: 'https://www.mk.co.kr/rss/30100041/', tier: 2, reliability: 'stable', fetchMethod: 'rss', requiresBrowserUA: true },
   { id: 'herald', name: '헤럴드경제', rssUrl: 'https://biz.heraldcorp.com/rss/google/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   // rss.edaily.co.kr's HTTPS listener has a broken TLS handshake (confirmed with openssl
