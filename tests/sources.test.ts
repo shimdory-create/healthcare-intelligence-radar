@@ -17,10 +17,10 @@ describe('SOURCES', () => {
     expect(SOURCES.filter((s) => s.tier === 3).length).toBe(21);
   });
 
-  it('marks 중앙일보 as experimental with google_news_rss fetch method', () => {
+  it('collects 중앙일보 via its Naver News channel (google_news_rss retired 2026-09-20)', () => {
     const joongang = SOURCES.find((s) => s.id === 'joongang');
-    expect(joongang?.reliability).toBe('experimental');
-    expect(joongang?.fetchMethod).toBe('google_news_rss');
+    expect(joongang?.reliability).toBe('stable');
+    expect(joongang?.fetchMethod).toBe('html_scrape');
   });
 
   it('marks 매일경제 as requiring a browser user-agent', () => {

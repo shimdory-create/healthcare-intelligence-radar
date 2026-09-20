@@ -74,6 +74,30 @@ export interface SourceConfig {
   jsonScrape?: JsonScrapeConfig;
 }
 
+/** shared list-page structure for an outlet's official Naver News channel
+ *  (`media.naver.com/press/<code>`) -- used when the outlet's own site blocks Vercel's
+ *  egress but it syndicates to Naver (hankyung/joongang, both switched 2026-09-20; see
+ *  project_source_coverage_and_monitoring memory for the full diagnosis). If another outlet
+ *  needs the same treatment: find its press code by loading `media.naver.com/press/<code>`
+ *  and confirming the outlet's name appears in the page, then reuse these selectors --
+ *  verified identical across both outlets so far. */
+const NAVER_NEWS_SELECTORS: ScrapeSelectors = {
+  item: 'li.press_edit_news_item',
+  title: '.press_edit_news_title',
+  link: 'a.press_edit_news_link',
+  date: '.r_ico_b b',
+};
+
+/** the Naver News channel page shows relative Korean time text ("47분전"/"3시간전"/"1일전"),
+ *  not an absolute date -- computed back from scrape time. Coarser than a real timestamp
+ *  (day-level once an item passes 24h) but good enough for same-day report/digest sorting. */
+function parseNaverRelativeTime(raw: string): Date | null {
+  const m = raw.trim().match(/^(\d+)(분|시간|일)전$/);
+  if (!m) return null;
+  const unitMs = m[2] === '분' ? 60_000 : m[2] === '시간' ? 3_600_000 : 86_400_000;
+  return new Date(Date.now() - Number(m[1]) * unitMs);
+}
+
 export const SOURCES: SourceConfig[] = [
   // Tier 1 — 공공기관
   { id: 'fsc', name: '금융위원회', rssUrl: 'http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', tier: 1, reliability: 'stable', fetchMethod: 'rss' },
@@ -256,21 +280,7 @@ export const SOURCES: SourceConfig[] = [
     tier: 2,
     reliability: 'stable',
     fetchMethod: 'html_scrape',
-    scrape: {
-      url: 'https://media.naver.com/press/015',
-      selectors: { item: 'li.press_edit_news_item', title: '.press_edit_news_title', link: 'a.press_edit_news_link', date: '.r_ico_b b' },
-      // this page shows relative Korean time text ("47분전"/"3시간전"/"1일전"), not an
-      // absolute date -- compute back from scrape time. Coarser than a real timestamp (day-level
-      // once an item passes 24h) but good enough for same-day report/digest sorting, and no
-      // worse than falling back to collection time (the no-date default every other source
-      // gets when a list page has none at all).
-      parseDate: (raw) => {
-        const m = raw.trim().match(/^(\d+)(분|시간|일)전$/);
-        if (!m) return null;
-        const unitMs = m[2] === '분' ? 60_000 : m[2] === '시간' ? 3_600_000 : 86_400_000;
-        return new Date(Date.now() - Number(m[1]) * unitMs);
-      },
-    },
+    scrape: { url: 'https://media.naver.com/press/015', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime },
   },
   { id: 'mk', name: '매일경제', rssUrl: 'https://www.mk.co.kr/rss/30100041/', tier: 2, reliability: 'stable', fetchMethod: 'rss', requiresBrowserUA: true },
   { id: 'herald', name: '헤럴드경제', rssUrl: 'https://biz.heraldcorp.com/rss/google/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
@@ -281,7 +291,23 @@ export const SOURCES: SourceConfig[] = [
   // homepage), which sidesteps the broken TLS entirely.
   { id: 'edaily', name: '이데일리', rssUrl: 'http://rss.edaily.co.kr/edaily_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'sedaily', name: '서울경제', rssUrl: 'https://www.sedaily.com/rss/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
-  { id: 'joongang', name: '중앙일보', rssUrl: 'https://news.google.com/rss/search?q=site:joongang.co.kr+when:1d&hl=ko&gl=KR&ceid=KR:ko', tier: 2, reliability: 'experimental', fetchMethod: 'google_news_rss' },
+  {
+    // was google_news_rss (Google News search proxy) -- near-zero yield, root-caused
+    // 2026-09-16: Google's own redirect chain rarely leaves news.google.com for a bare
+    // `fetch()`, so resolveGoogleNewsUrl correctly rejected almost every item as unresolved.
+    // That's a Google-side bottleneck, unrelated to whether joongang.co.kr itself blocks
+    // Vercel -- switching to hankyung's fix (its official Naver News channel, press code 025
+    // confirmed via page content) sidesteps Google's redirect problem entirely, same as it
+    // sidesteps hankyung's WAF block. Verified live 2026-09-20: 153 article items in one
+    // static fetch. No longer 'experimental' -- this method has nothing in common with the
+    // old one's failure mode.
+    id: 'joongang',
+    name: '중앙일보',
+    tier: 2,
+    reliability: 'stable',
+    fetchMethod: 'html_scrape',
+    scrape: { url: 'https://media.naver.com/press/025', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime },
+  },
   { id: 'ajunews', name: '아주경제', rssUrl: 'https://www.ajunews.com/rss/economy.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'kmib', name: '국민일보', rssUrl: 'https://www.kmib.co.kr/rss/data/kmibRssAll.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
   { id: 'mt', name: '머니투데이', rssUrl: 'https://rss.mt.co.kr/mt_news.xml', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
