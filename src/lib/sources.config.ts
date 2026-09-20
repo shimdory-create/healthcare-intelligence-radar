@@ -299,6 +299,12 @@ export const SOURCES: SourceConfig[] = [
   { id: 'munhwa', name: '문화일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/021', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   { id: 'nocutnews', name: '노컷뉴스', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/079', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   { id: 'hankookilbo', name: '한국일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/469', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  // broadcasters (방송사), added 2026-09-20 -- neither has its own public news RSS (checked
+  // both common guessed paths and each site's own homepage for a link, found neither), but
+  // all three are registered Naver News content partners with substantial channels.
+  { id: 'kbs', name: 'KBS', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/056', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'mbc', name: 'MBC', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/214', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'sbs', name: 'SBS', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/055', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   // rss.edaily.co.kr's HTTPS listener has a broken TLS handshake (confirmed with openssl
   // s_client directly, not a Node/client issue) -- found live 2026-09-18 after this source hit
   // 8/8 consecutive collectAll() failures. The old economy-specific feed also 404s; this is
