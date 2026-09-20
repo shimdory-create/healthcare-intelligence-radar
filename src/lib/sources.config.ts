@@ -284,6 +284,13 @@ export const SOURCES: SourceConfig[] = [
   },
   { id: 'mk', name: '매일경제', rssUrl: 'https://www.mk.co.kr/rss/30100041/', tier: 2, reliability: 'stable', fetchMethod: 'rss', requiresBrowserUA: true },
   { id: 'herald', name: '헤럴드경제', rssUrl: 'https://biz.heraldcorp.com/rss/google/economy', tier: 2, reliability: 'stable', fetchMethod: 'rss' },
+  // both originally checked and SKIPPED during the 2026-09-18 media re-survey for having no
+  // public RSS feed -- revisited 2026-09-20 after the hankyung/joongang Naver-channel fix
+  // showed the same trick works for any outlet with an official Naver News channel, not just
+  // ones already broken. Press codes found via each outlet's own homepage link, confirmed via
+  // page content, verified >100 items each.
+  { id: 'inews24', name: '아이뉴스24', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/031', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  { id: 'dailian', name: '데일리안', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/119', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   // rss.edaily.co.kr's HTTPS listener has a broken TLS handshake (confirmed with openssl
   // s_client directly, not a Node/client issue) -- found live 2026-09-18 after this source hit
   // 8/8 consecutive collectAll() failures. The old economy-specific feed also 404s; this is
