@@ -37,6 +37,19 @@ const ROUTE_LABELS: Record<string, string> = {
   enrich: '인트라데이 수집',
 };
 
+// short annotations for sources whose current error/저수율 pattern has already been
+// investigated -- shown directly next to the source so a recurring, already-understood
+// issue doesn't read as a new one needing fresh investigation. kicaa is worded differently
+// on purpose: it's being watched, not root-caused -- don't blur that distinction with the
+// other three, which are confirmed and accepted as unfixable from app code. See
+// project_source_coverage_and_monitoring.md for the full diagnosis of each.
+const KNOWN_ISSUES: Record<string, string> = {
+  hankyung: '원인 파악됨: Vercel 아웃바운드 IP 차단(2026-09-18 확인) — 앱 코드로 해결 불가, 수용',
+  khidi: '원인 파악됨: hankyung과 동일한 Vercel IP 차단 패턴(2026-09-18 확인) — 수용',
+  joongang: '원인 파악됨: 구글뉴스 RSS 경유 실험적 소스라 저수율 — 알려진 한계, 수용',
+  kicaa: '원인 미파악: 로컬에선 정상인데 프로덕션에서만 간헐적 0건 — 모니터링 중',
+};
+
 function StageCell({ value }: { value: string | null }) {
   if (value === null) return <span className="text-muted-foreground">-</span>;
   const isError = value.startsWith('error');
@@ -105,6 +118,11 @@ export default async function MonitoringPage() {
                     <td className="px-4 py-2">
                       <div className="font-medium">{r.name}</div>
                       <div className="text-muted-foreground text-xs">{r.sourceId}</div>
+                      {KNOWN_ISSUES[r.sourceId] && (
+                        <div className="mt-1 max-w-[14rem] text-xs text-blue-600 dark:text-blue-400">
+                          {KNOWN_ISSUES[r.sourceId]}
+                        </div>
+                      )}
                     </td>
                     <td className="text-muted-foreground px-4 py-2">{TIER_LABELS[r.tier]}</td>
                     <td className="px-4 py-2">
