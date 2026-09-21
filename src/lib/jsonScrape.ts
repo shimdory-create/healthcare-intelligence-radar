@@ -55,7 +55,10 @@ export async function fetchJsonScrapedArticles(source: SourceConfig): Promise<Ra
     }
 
     const dateRaw = dateField ? record[dateField] : undefined;
-    const dateText = typeof dateRaw === 'string' ? dateRaw : undefined;
+    // some JSON APIs give an epoch-millis number instead of a date string (seen live on
+    // 쿠키뉴스's Daum-channel API, 2026-09-21) -- stringify it so parseDate gets a consistent
+    // string input either way (e.g. `new Date(Number(raw))` for the epoch-millis case).
+    const dateText = typeof dateRaw === 'string' ? dateRaw : typeof dateRaw === 'number' ? String(dateRaw) : undefined;
     const publishedAt = dateText && parseDate ? parseDate(dateText) : null;
 
     results.push({ title, url: absoluteUrl, publishedAt, snippet: '' });

@@ -299,6 +299,30 @@ export const SOURCES: SourceConfig[] = [
   { id: 'munhwa', name: '문화일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/021', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   { id: 'nocutnews', name: '노컷뉴스', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/079', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
   { id: 'hankookilbo', name: '한국일보', tier: 2, reliability: 'stable', fetchMethod: 'html_scrape', scrape: { url: 'https://media.naver.com/press/469', selectors: NAVER_NEWS_SELECTORS, parseDate: parseNaverRelativeTime } },
+  {
+    // 쿠키뉴스 has no Naver News channel (confirmed 2026-09-20 -- Naver News search returned
+    // zero press-linked articles for it), but it IS on Daum's official partner list
+    // (news.daum.net/cplist) with its own Daum channel (v.daum.net/channel/47) -- that channel
+    // page is a client-rendered SPA with nothing in the static HTML, but its own frontend
+    // calls this plain JSON API (found via the browser's network log), same pattern as kpbma.
+    id: 'cookienews',
+    name: '쿠키뉴스',
+    tier: 2,
+    reliability: 'stable',
+    fetchMethod: 'json_scrape',
+    jsonScrape: {
+      url: 'https://hades-cerberus.v.daum.net/charon/media_home_news_all/data?cpId=47&size=100',
+      itemsPath: 'items',
+      titleField: 'title',
+      // pcLink is already a full absolute URL -- reuse it as the "id" and pass it straight
+      // through as the url template, instead of reconstructing a URL from a bare numeric id
+      idField: 'pcLink',
+      urlTemplate: (id) => id,
+      dateField: 'createDt',
+      // epoch-millis number (jsonScrape.ts stringifies it before calling this)
+      parseDate: (raw) => new Date(Number(raw)),
+    },
+  },
   // broadcasters (방송사), added 2026-09-20 -- neither has its own public news RSS (checked
   // both common guessed paths and each site's own homepage for a link, found neither), but
   // all three are registered Naver News content partners with substantial channels.

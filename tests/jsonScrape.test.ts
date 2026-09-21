@@ -96,6 +96,29 @@ describe('fetchJsonScrapedArticles', () => {
     expect(articles[0].publishedAt?.toISOString()).toBe('2026-09-15T15:00:00.000Z');
   });
 
+  it('stringifies a numeric (epoch-millis) date field before handing it to parseDate', async () => {
+    // seen live on 쿠키뉴스's Daum-channel JSON API, 2026-09-21: createDt is a number, not a
+    // date string
+    mockFetchJson({
+      data: [{ b_idx: '1', b_subject: '제목', b_regdate: 1789963552098 }],
+    });
+    const source = makeSource({
+      jsonScrape: {
+        url: 'https://example.org/api/list',
+        itemsPath: 'data',
+        titleField: 'b_subject',
+        idField: 'b_idx',
+        dateField: 'b_regdate',
+        urlTemplate: (id) => `/press/select/${id}`,
+        parseDate: (raw) => new Date(Number(raw)),
+      },
+    });
+
+    const articles = await fetchJsonScrapedArticles(source);
+
+    expect(articles[0].publishedAt?.toISOString()).toBe('2026-09-21T04:05:52.098Z');
+  });
+
   it('leaves publishedAt null when no dateField or parseDate is configured', async () => {
     mockFetchJson(SAMPLE_API_RESPONSE);
     const source = makeSource({
