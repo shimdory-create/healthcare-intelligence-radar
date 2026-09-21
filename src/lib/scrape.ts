@@ -7,6 +7,10 @@ import type { RawArticle } from './rss';
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
+// how long to wait before a single same-page retry when a fetch succeeds but parses to zero
+// items -- exported so tests can drive it with fake timers instead of actually waiting.
+export const ZERO_ITEM_RETRY_DELAY_MS = 2000;
+
 /** fetches a source's configured board/list page (source.scrape) and parses its repeating
  *  item structure into the same RawArticle shape fetchSourceArticles (rss.ts) produces --
  *  collect.ts treats both the same way from here on. Unlike RSS, there is no feed-format
@@ -14,8 +18,24 @@ const USER_AGENT =
  *  so each scraped source supplies its own CSS selectors (and optional date parser) in
  *  sources.config.ts. Never throws for a per-item parse miss (a malformed item is just
  *  skipped) -- only a failed fetch of the page itself throws, same contract as
- *  fetchSourceArticles. */
+ *  fetchSourceArticles.
+ *
+ *  Retries once (after ZERO_ITEM_RETRY_DELAY_MS) when the fetch itself succeeds but zero items
+ *  parse out -- found live on kicaa (한국손해사정사회): local dev fetches 10 real rows
+ *  reliably, but Vercel's network intermittently gets back a 200 response that parses to zero
+ *  items (no fetch error, just empty), consistent with a transient bot-check/interstitial page
+ *  rather than the site being genuinely down or the page genuinely having nothing new. A
+ *  same-page retry a couple seconds later is cheap (one extra request) and harmless even when
+ *  the zero really was genuine -- an unchanged board page returns the same zero a moment
+ *  later, so nothing is lost by trying once more before accepting it. */
 export async function fetchScrapedArticles(source: SourceConfig): Promise<RawArticle[]> {
+  const first = await fetchScrapedArticlesOnce(source);
+  if (first.length > 0) return first;
+  await new Promise((resolve) => setTimeout(resolve, ZERO_ITEM_RETRY_DELAY_MS));
+  return fetchScrapedArticlesOnce(source);
+}
+
+async function fetchScrapedArticlesOnce(source: SourceConfig): Promise<RawArticle[]> {
   if (!source.scrape) {
     throw new Error(`${source.id}: fetchMethod is 'html_scrape' but no scrape config is set`);
   }

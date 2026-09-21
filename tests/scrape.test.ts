@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchScrapedArticles } from '@/lib/scrape';
+import { fetchScrapedArticles, ZERO_ITEM_RETRY_DELAY_MS } from '@/lib/scrape';
 import type { SourceConfig } from '@/lib/sources.config';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function mockFetchHtml(html: string, ok = true) {
@@ -218,6 +219,9 @@ describe('fetchScrapedArticles', () => {
   });
 
   it('skips an item whose href is a javascript: pseudo-URL and no onclick config is given', async () => {
+    // this legitimately parses to zero items even on the (also-mocked) retry, so drive the
+    // retry delay with fake timers instead of actually waiting ZERO_ITEM_RETRY_DELAY_MS
+    vi.useFakeTimers();
     mockFetchHtml(`
       <html><body>
         <table><tbody>
@@ -229,9 +233,46 @@ describe('fetchScrapedArticles', () => {
       scrape: { url: 'https://example.com/board', selectors: { item: 'tbody tr', title: 'td.title a' } },
     });
 
-    const articles = await fetchScrapedArticles(source);
+    const promise = fetchScrapedArticles(source);
+    await vi.advanceTimersByTimeAsync(ZERO_ITEM_RETRY_DELAY_MS);
+    const articles = await promise;
 
     expect(articles).toHaveLength(0);
+  });
+
+  it('retries once when the fetch succeeds but parses to zero items, and uses the retry result', async () => {
+    // found live on kicaa: Vercel's network intermittently gets a 200 that parses to zero
+    // items -- a same-page retry a couple seconds later often succeeds
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => '<html><body><ul class="board-list"></ul></body></html>' })
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => SAMPLE_BOARD_HTML });
+    vi.stubGlobal('fetch', fetchMock);
+    const source = makeSource({
+      scrape: { url: 'https://example.gov/board', selectors: { item: 'li.row', title: 'a.tit', date: 'span.date' } },
+    });
+
+    const promise = fetchScrapedArticles(source);
+    await vi.advanceTimersByTimeAsync(ZERO_ITEM_RETRY_DELAY_MS);
+    const articles = await promise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(articles).toHaveLength(2);
+    expect(articles[0].title).toBe('첫 번째 보도자료');
+  });
+
+  it('does not retry when the first fetch already returns items', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => SAMPLE_BOARD_HTML });
+    vi.stubGlobal('fetch', fetchMock);
+    const source = makeSource({
+      scrape: { url: 'https://example.gov/board', selectors: { item: 'li.row', title: 'a.tit', date: 'span.date' } },
+    });
+
+    const articles = await fetchScrapedArticles(source);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(articles).toHaveLength(2);
   });
 
   it('throws when the board page fetch itself fails', async () => {
