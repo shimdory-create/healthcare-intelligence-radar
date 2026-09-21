@@ -45,7 +45,7 @@ const ROUTE_LABELS: Record<string, string> = {
 // project_source_coverage_and_monitoring.md for the full diagnosis of each.
 const KNOWN_ISSUES: Record<string, string> = {
   khidi: '원인 파악됨: Vercel 아웃바운드 IP 차단(2026-09-18 확인, hankyung과 동일 패턴) — 수용, 대체 경로 없음(뉴스사가 아니라 네이버 채널 없음)',
-  kicaa: '원인 미파악: 로컬에선 정상인데 프로덕션에서만 간헐적 0건 — 모니터링 중, 대체 경로 없음(협회 자체 사이트뿐)',
+  kicaa: '원인 부분 파악(2026-09-21): 로컬은 항상 정상, 프로덕션에서만 간헐적 0건/연결오류 — 재시도 로직 추가로 연결오류는 해결됐으나 0건은 재발(hankyung/khidi와 유사한 Vercel IP 소프트 차단 추정), 대체 경로 없음(협회 자체 사이트뿐)',
   // hankyung/joongang intentionally have NO entry here -- 2026-09-20, both switched from their
   // blocked/near-zero-yield methods to scraping their official Naver News channels instead
   // (see sources.config.ts). Genuine fix attempts, verified live from Vercel -- if either
