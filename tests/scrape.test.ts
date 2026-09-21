@@ -275,13 +275,47 @@ describe('fetchScrapedArticles', () => {
     expect(articles).toHaveLength(2);
   });
 
-  it('throws when the board page fetch itself fails', async () => {
+  it('throws when the board page fetch fails on both the first attempt and the retry', async () => {
+    // mockFetchHtml persists across calls, so both the first attempt and the retry get the
+    // same failing response -- drive the retry delay with fake timers
+    vi.useFakeTimers();
     mockFetchHtml('', false);
     const source = makeSource({
       scrape: { url: 'https://example.gov/board', selectors: { item: 'li.row', title: 'a.tit' } },
     });
 
-    await expect(fetchScrapedArticles(source)).rejects.toThrow('HTTP 500');
+    const promise = fetchScrapedArticles(source);
+    // catch this promise's own rejection immediately so Node never sees it as briefly
+    // unhandled while the microtask/fake-timer advances below let the source's own try/catch
+    // (and the retry's setTimeout) actually run
+    const settled = promise.catch((err: Error) => err);
+    await vi.advanceTimersByTimeAsync(ZERO_ITEM_RETRY_DELAY_MS);
+
+    const result = await settled;
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain('HTTP 500');
+  });
+
+  it('retries and succeeds when only the first attempt throws (e.g. a connection-level fetch failure)', async () => {
+    // found live on kicaa: the raw fetch() call itself sometimes rejects with a generic
+    // "fetch failed" (not an HTTP error status) rather than returning a bad response
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => SAMPLE_BOARD_HTML });
+    vi.stubGlobal('fetch', fetchMock);
+    const source = makeSource({
+      scrape: { url: 'https://example.gov/board', selectors: { item: 'li.row', title: 'a.tit', date: 'span.date' } },
+    });
+
+    const promise = fetchScrapedArticles(source);
+    await vi.advanceTimersByTimeAsync(0); // flush the microtask queue so the first (rejected) attempt is caught before advancing past the retry delay
+    await vi.advanceTimersByTimeAsync(ZERO_ITEM_RETRY_DELAY_MS);
+    const articles = await promise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(articles).toHaveLength(2);
   });
 
   it('throws when fetchMethod is html_scrape but no scrape config is set', async () => {

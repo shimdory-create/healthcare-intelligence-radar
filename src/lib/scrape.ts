@@ -20,17 +20,27 @@ export const ZERO_ITEM_RETRY_DELAY_MS = 2000;
  *  skipped) -- only a failed fetch of the page itself throws, same contract as
  *  fetchSourceArticles.
  *
- *  Retries once (after ZERO_ITEM_RETRY_DELAY_MS) when the fetch itself succeeds but zero items
- *  parse out -- found live on kicaa (한국손해사정사회): local dev fetches 10 real rows
- *  reliably, but Vercel's network intermittently gets back a 200 response that parses to zero
- *  items (no fetch error, just empty), consistent with a transient bot-check/interstitial page
- *  rather than the site being genuinely down or the page genuinely having nothing new. A
- *  same-page retry a couple seconds later is cheap (one extra request) and harmless even when
- *  the zero really was genuine -- an unchanged board page returns the same zero a moment
- *  later, so nothing is lost by trying once more before accepting it. */
+ *  Retries once (after ZERO_ITEM_RETRY_DELAY_MS) when the first attempt either throws (a fetch
+ *  error) or succeeds but parses to zero items -- found live on kicaa (한국손해사정사회),
+ *  which shows BOTH symptoms across different runs: sometimes a 200 that parses to zero items
+ *  (no fetch error, just empty -- consistent with a transient bot-check/interstitial page),
+ *  sometimes the raw `fetch()` call itself rejecting with a generic "fetch failed" (a
+ *  connection-level failure, e.g. a dropped TLS handshake) rather than an HTTP error status.
+ *  Neither looks like the site being genuinely down (local dev fetches it reliably), so both
+ *  get one same-page retry before giving up. A **config** error (missing `source.scrape`) is
+ *  validated up front, outside this retry, since retrying a code bug wastes a cycle for
+ *  nothing -- only the network-touching part is retried. Cheap even when the failure was
+ *  genuine (the retry just fails or comes back empty again), so there's no real downside. */
 export async function fetchScrapedArticles(source: SourceConfig): Promise<RawArticle[]> {
-  const first = await fetchScrapedArticlesOnce(source);
-  if (first.length > 0) return first;
+  if (!source.scrape) {
+    throw new Error(`${source.id}: fetchMethod is 'html_scrape' but no scrape config is set`);
+  }
+  try {
+    const first = await fetchScrapedArticlesOnce(source);
+    if (first.length > 0) return first;
+  } catch {
+    // swallow -- the retry below gets the real chance to succeed or throw for real
+  }
   await new Promise((resolve) => setTimeout(resolve, ZERO_ITEM_RETRY_DELAY_MS));
   return fetchScrapedArticlesOnce(source);
 }
