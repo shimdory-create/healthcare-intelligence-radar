@@ -3,9 +3,10 @@ import type { ReportCandidate } from '@/lib/reportCandidates';
 
 const extractArticleText = vi.fn();
 const analyzeDeep = vi.fn();
+const consolidateSimilarStories = vi.fn();
 
 vi.mock('@/lib/articleExtract', () => ({ extractArticleText }));
-vi.mock('@/lib/gemini', () => ({ analyzeDeep }));
+vi.mock('@/lib/gemini', () => ({ analyzeDeep, consolidateSimilarStories }));
 
 function makeCandidate(overrides: Partial<ReportCandidate>): ReportCandidate {
   return {
@@ -24,6 +25,8 @@ function makeCandidate(overrides: Partial<ReportCandidate>): ReportCandidate {
 beforeEach(() => {
   extractArticleText.mockReset();
   analyzeDeep.mockReset();
+  consolidateSimilarStories.mockReset();
+  consolidateSimilarStories.mockResolvedValue([]);
 });
 
 describe('analyzeCandidatesDeep', () => {
@@ -99,5 +102,24 @@ describe('analyzeCandidatesDeep', () => {
     expect(results.size).toBe(1);
     expect(skipped).toEqual([{ articleId: 2, reason: 'deadline' }]);
     vi.restoreAllMocks();
+  });
+
+  it('drops the less complete duplicate when consolidateSimilarStories groups two candidates, keeping the one with more bullets', async () => {
+    const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
+    extractArticleText.mockResolvedValue('본문');
+    analyzeDeep
+      .mockResolvedValueOnce({
+        category: 'Global', headline: '위고비 시력상실 소송', bullets: [{ text: 'a', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true,
+      })
+      .mockResolvedValueOnce({
+        category: 'Global', headline: '오젬픽·위고비 시력 잃은 환자들 소송', bullets: [{ text: 'a', note: null, subBullets: [] }, { text: 'b', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true,
+      });
+    consolidateSimilarStories.mockResolvedValue([[10, 11]]);
+
+    const { results, skipped } = await analyzeCandidatesDeep([makeCandidate({ id: 10 }), makeCandidate({ id: 11 })]);
+
+    expect(results.has(10)).toBe(false);
+    expect(results.has(11)).toBe(true);
+    expect(skipped).toEqual([{ articleId: 10, reason: 'consolidated-duplicate' }]);
   });
 });

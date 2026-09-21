@@ -231,7 +231,7 @@ ${fullText.slice(0, 6000)}
 - bullets: 최대 2개 (상한선일 뿐 목표 아님 -- 1개로 충분하면 1개만). 각 항목은:
   - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
   - note: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함) 또는 생소한 기업·법인명에 대한 한 줄 설명, "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 note도 비워둘 것). 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말고, 해당 없으면 빈 문자열(""). 예: 화이트리스트에 있는 "심평원"을 note에 "심평원: 건강보험심사평가원"처럼 설명하는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 note를 반드시 빈 문자열("")로 둘 것
-  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 보통 최대 2개 (상한선, 필요한 만큼만) -- **단, 하나의 발표/출시에 서로 다른 개별 구성요소(하위 서비스, 세부 상품 등)가 여러 개 묶여 있고 그 각각을 나열하는 것 자체가 핵심 정보인 경우(예: 하나의 통합 솔루션이 5개의 개별 서비스로 구성)엔 예외적으로 5개까지 나열 가능**. 그 외 일반적인 경우는 여전히 2개 이내로 압축. 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것
+  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 보통 최대 2개 (상한선, 필요한 만큼만) -- **단, 하나의 발표/출시에 서로 다른 개별 구성요소(하위 서비스, 세부 상품 등)가 여러 개 묶여 있고 그 각각을 나열하는 것 자체가 핵심 정보인 경우(예: 하나의 통합 솔루션이 5개의 개별 서비스로 구성)엔 예외적으로 5개까지 나열 가능**. 그 외 일반적인 경우는 여전히 2개 이내로 압축. 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것. **이 예외는 상품/서비스 "출시·발표" 기사에만 적용** -- 국회·정부의 법률안·안건 의결처럼 여러 항목을 단순 열거하는 기사(예: "보건복지위, 법률안 88건 의결")는 예외 대상이 아님, 2개 이내로 가장 중요한 항목만 압축할 것. 잘못된 예: 의결된 법률안이 여러 건이라고 해서 각 법률안을 sub_bullets에 3개 이상 나열 -- 이 경우 헬스케어 사업에 실질적 영향이 큰 1~2건만 골라 담을 것
 - background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). **bullets/sub_bullets에 이미 나온 사실을 반복하지 말 것** -- 거기 없는 추가 맥락일 때만 의미가 있음. 없으면 없는 대로 두는 게 기본값 -- 이해에 꼭 필요한 경우에만 채우고, 그렇지 않으면 빈 문자열("")
   예: sub_bullets에 이미 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"이 있는데 background에 똑같이 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"을 또 쓰는 것은 잘못된 예 -- 이 경우 background는 빈 문자열("")이어야 함
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
@@ -287,4 +287,54 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
     isReference: parsed.is_reference,
     isRelevant: parsed.is_relevant,
   };
+}
+
+const CONSOLIDATE_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    groups: { type: 'array', items: { type: 'array', items: { type: 'integer' } } },
+  },
+  required: ['groups'],
+};
+
+/** finds report candidates that describe the SAME real-world event/story but survived exact
+ *  title-based duplicate detection (getReportCandidates' distinct-outlet grouping) because
+ *  each outlet phrased its own headline differently. Found live 2026-09-21: a GLP-1/위고비
+ *  시력상실(vision loss) lawsuit story appeared as three separate report items (one 6-outlet
+ *  "다수매체 보도" group, one 2-outlet group, and one standalone `high` item covering the FDA
+ *  angle) because none of their raw titles matched closely enough for the exact-match dedup;
+ *  same underlying gap let two same-outlet 삼성생명 health-insurance articles ("Care+ 출시" /
+ *  "라인업 완료") both survive as separate items. Runs on the AI-rewritten headlines (already
+ *  compressed to the core fact, so more consistent across outlets than raw titles) rather than
+ *  original article titles. Deliberately conservative -- only groups items that are the same
+ *  specific event, never merely the same general topic (an over-eager grouping would silently
+ *  drop distinct stories). Never throws -- a failure here must not block the report; callers
+ *  get an empty result and every candidate stays ungrouped. */
+export async function consolidateSimilarStories(
+  items: { id: number; headline: string }[],
+): Promise<number[][]> {
+  if (items.length < 2) return [];
+
+  const list = items.map((i) => `id=${i.id}: ${i.headline}`).join('\n');
+  const prompt = `아래는 오늘 리포트 후보 기사들의 (재작성된) 헤드라인 목록이다. 서로 다른 id지만 **같은 구체적 사건·발표를 다루는 것들**을 그룹으로 묶어라.
+
+${list}
+
+규칙:
+- 같은 사건이어야 그룹으로 묶는다 -- 매체마다 표현이 달라도 같은 발표/사건/소송/조사를 가리키면 같은 그룹 (예: "위고비 맞고 시력 잃었다" 소송을 다룬 여러 매체의 서로 다른 헤드라인은 한 그룹).
+- 단순히 주제·기업·산업이 같을 뿐 서로 다른 개별 사건이면 절대 묶지 말 것 (예: 같은 기업의 서로 다른 신제품 발표 두 건은 별개 그룹).
+- 확신이 없으면 묶지 말 것 -- 잘못 묶어서 서로 다른 소식을 하나로 합치는 것이, 놓치고 안 묶는 것보다 더 나쁘다.
+- 2개 이상 id가 같은 사건인 그룹만 출력. 그룹에 속하지 않는 id는 출력하지 않는다.
+
+출력: groups (각 그룹은 id 배열)`;
+
+  try {
+    const parsed = (await callGemini(prompt, CONSOLIDATE_RESPONSE_SCHEMA)) as { groups: number[][] };
+    const validIds = new Set(items.map((i) => i.id));
+    return parsed.groups
+      .map((g) => g.filter((id) => validIds.has(id)))
+      .filter((g) => g.length >= 2);
+  } catch {
+    return [];
+  }
 }
