@@ -82,8 +82,13 @@ describe('analyzeDeep', () => {
         category: '국내 산업',
         headline: '사노피, 독감백신 전국 공급 개시',
         headline_note: '',
+        headline_source: '',
         bullets: [
-          { text: '9월 8일부터 전국 공급 개시', note: '', sub_bullets: ['표준용량 대비 항원 4배'] },
+          {
+            text: '9월 8일부터 전국 공급 개시',
+            note: '',
+            sub_bullets: [{ text: '표준용량 대비 항원 4배', note: '' }],
+          },
         ],
         background: '',
         is_reference: false,
@@ -97,7 +102,14 @@ describe('analyzeDeep', () => {
       category: '국내 산업',
       headline: '사노피, 독감백신 전국 공급 개시',
       headlineNote: null,
-      bullets: [{ text: '9월 8일부터 전국 공급 개시', note: null, subBullets: ['표준용량 대비 항원 4배'] }],
+      headlineSource: null,
+      bullets: [
+        {
+          text: '9월 8일부터 전국 공급 개시',
+          note: null,
+          subBullets: [{ text: '표준용량 대비 항원 4배', note: null }],
+        },
+      ],
       background: null,
       isReference: false,
       isRelevant: true,
@@ -196,6 +208,75 @@ describe('analyzeDeep', () => {
     const result = await analyzeDeep('제목', '본문');
 
     expect(result.bullets[0].note).toBeNull();
+  });
+
+  it('drops a sub_bullet note whose term never appears in that sub_bullet\'s own text', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 보험·제도',
+        headline: 'h',
+        bullets: [
+          {
+            text: '자연재해 대비 강화',
+            note: '',
+            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', note: '건정심: 건강보험정책심의위원회' }],
+          },
+        ],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.bullets[0].subBullets[0].note).toBeNull();
+  });
+
+  it('keeps a sub_bullet note whose term does appear in that sub_bullet\'s own text', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: 'Global',
+        headline: 'h',
+        bullets: [
+          {
+            text: '자연재해 대비 강화',
+            note: '',
+            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', note: '난카이 트로프: 일본 혼슈 남쪽 해곡' }],
+          },
+        ],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.bullets[0].subBullets[0].note).toBe('난카이 트로프: 일본 혼슈 남쪽 해곡');
+  });
+
+  it('passes headline_source through as-is, NOT subject to the orphaned-term guard', async () => {
+    // headline_source cites a source report, not a "term: definition" pair -- it should never
+    // be dropped just because its text doesn't literally appear in the headline
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: '국내 보험·제도',
+        headline: '보험연구원, AI 업무별 위험 차등관리 필요 제언',
+        headline_source: '금융분야 인공지능 가이드라인 개정과 보험산업의 대응 과제 (보험연구원 9.21일)',
+        bullets: [],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.headlineSource).toBe('금융분야 인공지능 가이드라인 개정과 보험산업의 대응 과제 (보험연구원 9.21일)');
   });
 
   it('throws when GEMINI_API_KEY is not set, same as analyzeArticles', async () => {

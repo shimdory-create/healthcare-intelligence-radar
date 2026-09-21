@@ -9,7 +9,10 @@ export interface ReportBullet {
    *  explanation always sits next to the term it's explaining rather than in one fixed slot
    *  under the headline regardless of which bullet actually used the term. */
   note: string | null;
-  subBullets: string[];
+  /** each sub-bullet can carry its own term-glossary note too (2026-09-21), same reasoning as
+   *  a bullet's own note -- an explanation sits next to the specific sub-bullet that used the
+   *  term, not off in one shared slot. */
+  subBullets: { text: string; note: string | null }[];
 }
 
 export interface ReportItem {
@@ -18,6 +21,10 @@ export interface ReportItem {
    *  note) -- rendered directly under the headline, before outletNote/bullets. Null when
    *  nothing in the headline needs explaining. */
   headlineNote: string | null;
+  /** citation naming the specific report/analysis this item's content is based on, when the
+   *  article explicitly cites one (2026-09-21, see gemini.ts's DeepAnalysisResult.headlineSource
+   *  doc comment) -- a different concept from headlineNote, rendered as its own line under it. */
+  headlineSource: string | null;
   /** the "N개 매체 보도 (매체1, 매체2, ...)" line for multi-outlet items -- distinct from a
    *  bullet's own term-glossary `note`; computed from the candidate's duplicate-group data,
    *  not from Gemini. Null for single-outlet items. */
@@ -59,6 +66,9 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
           const headlineNoteHtml = item.headlineNote
             ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.headlineNote)}</p>`
             : '';
+          const headlineSourceHtml = item.headlineSource
+            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.headlineSource)}</p>`
+            : '';
           const outletNoteHtml = item.outletNote
             ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.outletNote)}</p>`
             : '';
@@ -68,7 +78,12 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
                 ? `<p style="margin:2px 0 0 36px;font-size:11px;color:#777;">* ${escapeHtml(b.note)}</p>`
                 : '';
               const subHtml = b.subBullets
-                .map((s) => `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s)}</p>`)
+                .map((s) => {
+                  const subNoteHtml = s.note
+                    ? `<p style="margin:2px 0 0 52px;font-size:11px;color:#777;">* ${escapeHtml(s.note)}</p>`
+                    : '';
+                  return `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s.text)}</p>${subNoteHtml}`;
+                })
                 .join('');
               return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${bulletNoteHtml}${subHtml}`;
             })
@@ -77,7 +92,7 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
             ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
             : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${headlineSourceHtml}${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -122,6 +137,7 @@ export function buildReportSections(
     byName.get(sectionName)!.push({
       headline: deep.headline,
       headlineNote: deep.headlineNote,
+      headlineSource: deep.headlineSource,
       outletNote,
       bullets: deep.bullets,
       background: deep.background,
@@ -213,6 +229,19 @@ function notePara(text: string): Paragraph {
   });
 }
 
+/** a sub-bullet's own note, nested one level deeper than a bullet's note (left 800) to match
+ *  the sub-bullet's own deeper indent (left 880) -- visually anchors the explanation under the
+ *  specific sub-bullet it explains, not the bullet above it. */
+function subNotePara(text: string): Paragraph {
+  return new Paragraph({
+    children: [
+      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+    ],
+    spacing: { after: 60, ...SINGLE_LINE_SPACING },
+    indent: { left: 1060, hanging: 180 },
+  });
+}
+
 function backgroundPara(text: string): Paragraph {
   return new Paragraph({
     children: [
@@ -270,11 +299,15 @@ export async function buildReportDocx(
     for (const item of section.items) {
       children.push(headlinePara(item.isReference ? `(참고) ${item.headline}` : item.headline));
       if (item.headlineNote) children.push(notePara(item.headlineNote));
+      if (item.headlineSource) children.push(notePara(item.headlineSource));
       if (item.outletNote) children.push(notePara(item.outletNote));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));
         if (bullet.note) children.push(notePara(bullet.note));
-        for (const sub of bullet.subBullets) children.push(subBulletPara(sub));
+        for (const sub of bullet.subBullets) {
+          children.push(subBulletPara(sub.text));
+          if (sub.note) children.push(subNotePara(sub.note));
+        }
       }
       if (item.background) children.push(backgroundPara(item.background));
     }

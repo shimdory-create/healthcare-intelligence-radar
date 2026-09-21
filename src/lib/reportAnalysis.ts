@@ -7,6 +7,7 @@ export interface CandidateDeepResult {
   category: DeepAnalysisResult['category'];
   headline: string;
   headlineNote: string | null;
+  headlineSource: string | null;
   bullets: DeepAnalysisResult['bullets'];
   background: string | null;
   isReference: boolean;
