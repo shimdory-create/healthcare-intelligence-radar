@@ -93,7 +93,14 @@ async function callGemini(prompt: string, schema: object): Promise<unknown> {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
       }),
-      signal: AbortSignal.timeout(30000),
+      // 45s, not 30s -- found live 2026-09-21 right after adding headline_source and
+      // per-sub_bullet notes: the larger nested responseSchema measurably increased Gemini's
+      // generation time (observed 6.8s/14.7s/31s across 3 back-to-back real calls for the
+      // same prompt, the last one tripping the old 30s timeout). This constant is shared by
+      // every callGemini caller (1차 분류, 심층분석, 같은사건 통합), all of which already
+      // treat a timeout as a soft per-item failure (isolated batch/candidate skip, never
+      // blocks the whole run), so raising it is a pure latency buffer with no downside.
+      signal: AbortSignal.timeout(45000),
     },
   );
   if (!res.ok) {
