@@ -45,7 +45,7 @@ describe('buildReportSections', () => {
           {
             headline: '지텍정 약가협상 헤드라인',
             headlineNote: null, headlineSource: null,
-            outletNote: null,
+            outletNote: null, consolidatedNote: null,
             bullets: [{ text: 't', note: null, subBullets: [] }],
             background: null,
             isReference: false,
@@ -237,7 +237,7 @@ describe('buildReportSections', () => {
           {
             headline: 'GC녹십자 mRNA',
             headlineNote: null, headlineSource: null,
-            outletNote: '4개 매체 보도 (연합뉴스, 조선일보, 동아일보, 중앙일보)',
+            outletNote: '4개 매체 보도 (연합뉴스, 조선일보, 동아일보, 중앙일보)', consolidatedNote: null,
             bullets: [],
             background: null,
             isReference: false,
@@ -278,6 +278,28 @@ describe('buildReportSections', () => {
     expect(sections[0].items[0].outletNote).toBeNull();
   });
 
+  it('renders a "관련 보도 N건 통합" note when consolidatedCount is set', () => {
+    const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', headlineNote: null, headlineSource: null, bullets: [], background: null, isReference: false, isRelevant: true, consolidatedCount: 3 }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items[0].consolidatedNote).toBe('관련 보도 3건 통합');
+  });
+
+  it('leaves consolidatedNote null when consolidatedCount is absent or 1', () => {
+    const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
+    const deep = new Map<number, CandidateDeepResult>([
+      [1, { articleId: 1, category: '국내 산업', headline: 'h', headlineNote: null, headlineSource: null, bullets: [], background: null, isReference: false, isRelevant: true }],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items[0].consolidatedNote).toBeNull();
+  });
+
   it('keeps the fixed section order and omits empty sections', () => {
     const candidates = [
       makeCandidate({ id: 1, priority: 'high' }),
@@ -303,7 +325,7 @@ describe('buildReportEmailHtml', () => {
           {
             headline: '테스트 헤드라인',
             headlineNote: null, headlineSource: null,
-            outletNote: '테스트 노트',
+            outletNote: '테스트 노트', consolidatedNote: null,
             bullets: [{ text: '사실 1', note: null, subBullets: [{ text: '세부 1', note: null }] }],
             background: null,
             isReference: false,
@@ -331,7 +353,7 @@ describe('buildReportEmailHtml', () => {
           {
             headline: '카카오페이, PoC 완료',
             headlineNote: 'PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인', headlineSource: null,
-            outletNote: null,
+            outletNote: null, consolidatedNote: null,
             bullets: [],
             background: null,
             isReference: false,
@@ -352,7 +374,7 @@ describe('buildReportEmailHtml', () => {
     const sections: ReportSection[] = [
       {
         title: '국내 산업',
-        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, bullets: [{ text: '사실', note: null, subBullets: [] }], background: null, isReference: false }],
+        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [{ text: '사실', note: null, subBullets: [] }], background: null, isReference: false }],
       },
     ];
 
@@ -369,7 +391,7 @@ describe('buildReportEmailHtml', () => {
           {
             headline: 'h',
             headlineNote: null, headlineSource: null,
-            outletNote: null,
+            outletNote: null, consolidatedNote: null,
             bullets: [{ text: '건정심 재평가 착수', note: '건정심: 건강보험정책심의위원회', subBullets: [] }],
             background: null,
             isReference: false,
@@ -390,7 +412,7 @@ describe('buildReportEmailHtml', () => {
     const sections: ReportSection[] = [
       {
         title: '국내 산업',
-        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, bullets: [{ text: '사실', note: null, subBullets: [] }], background: null, isReference: false }],
+        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [{ text: '사실', note: null, subBullets: [] }], background: null, isReference: false }],
       },
     ];
 
@@ -401,7 +423,7 @@ describe('buildReportEmailHtml', () => {
 
   it('prefixes the headline with "(참고)" for reference-only items', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: '온라인 화제 기사', headlineNote: null, headlineSource: null, outletNote: null, bullets: [], background: null, isReference: true }] },
+      { title: '국내 산업', items: [{ headline: '온라인 화제 기사', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [], background: null, isReference: true }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -411,7 +433,7 @@ describe('buildReportEmailHtml', () => {
 
   it('does not prefix headlines for core (non-reference) items', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: '핵심 뉴스', headlineNote: null, headlineSource: null, outletNote: null, bullets: [], background: null, isReference: false }] },
+      { title: '국내 산업', items: [{ headline: '핵심 뉴스', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [], background: null, isReference: false }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -424,7 +446,7 @@ describe('buildReportEmailHtml', () => {
     const sections: ReportSection[] = [
       {
         title: '국내 산업',
-        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
+        items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [], background: 'Qubit은 디지털자산 전문 MGA', isReference: false }],
       },
     ];
 
@@ -435,7 +457,7 @@ describe('buildReportEmailHtml', () => {
 
   it('omits the "※" line when background is null', () => {
     const sections: ReportSection[] = [
-      { title: '국내 산업', items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, bullets: [], background: null, isReference: false }] },
+      { title: '국내 산업', items: [{ headline: 'h', headlineNote: null, headlineSource: null, outletNote: null, consolidatedNote: null, bullets: [], background: null, isReference: false }] },
     ];
 
     const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
@@ -454,7 +476,7 @@ describe('buildReportDocx', () => {
           {
             headline: '테스트 헤드라인',
             headlineNote: 'PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인', headlineSource: null,
-            outletNote: '테스트 노트',
+            outletNote: '테스트 노트', consolidatedNote: null,
             bullets: [{ text: '사실 1', note: '용어 설명', subBullets: [{ text: '세부 1', note: null }] }],
             background: '배경 정보',
             isReference: false,

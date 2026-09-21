@@ -120,6 +120,7 @@ describe('analyzeCandidatesDeep', () => {
 
     expect(results.has(10)).toBe(false);
     expect(results.has(11)).toBe(true);
+    expect(results.get(11)?.consolidatedCount).toBe(2);
     expect(skipped).toEqual([{ articleId: 10, reason: 'consolidated-duplicate' }]);
   });
 });

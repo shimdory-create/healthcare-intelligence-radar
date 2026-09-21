@@ -12,6 +12,11 @@ export interface CandidateDeepResult {
   background: string | null;
   isReference: boolean;
   isRelevant: boolean;
+  /** set (>1) when consolidateSimilarStories merged other same-event candidates into this
+   *  one -- lets report.ts show a "관련 보도 N건 통합" trace instead of silently absorbing
+   *  the dropped items with no visible sign multiple sources covered the same event. Absent
+   *  (undefined) for an item that wasn't part of any consolidation group. */
+  consolidatedCount?: number;
 }
 
 /** why a candidate has no entry in analyzeCandidatesDeep's results map -- surfaced in the
@@ -83,6 +88,7 @@ export async function analyzeCandidatesDeep(
     const richest = group.reduce((best, id) =>
       (results.get(id)!.bullets.length > results.get(best)!.bullets.length ? id : best),
     );
+    results.set(richest, { ...results.get(richest)!, consolidatedCount: group.length });
     for (const id of group) {
       if (id === richest) continue;
       results.delete(id);

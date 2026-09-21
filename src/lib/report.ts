@@ -29,6 +29,12 @@ export interface ReportItem {
    *  bullet's own term-glossary `note`; computed from the candidate's duplicate-group data,
    *  not from Gemini. Null for single-outlet items. */
   outletNote: string | null;
+  /** "관련 보도 N건 통합" trace for items that absorbed other same-event candidates via
+   *  consolidateSimilarStories (2026-09-21) -- distinct from outletNote, which only reflects
+   *  getReportCandidates' exact-title duplicate grouping. Without this, a merge is invisible
+   *  to the reader: the dropped items just silently disappear. Null when nothing was merged
+   *  into this item. */
+  consolidatedNote: string | null;
   bullets: ReportBullet[];
   /** background/context about a company or institution named in the item (e.g. a past
    *  certification, an unrelated business line) -- rendered with a "※ " prefix after the
@@ -72,6 +78,9 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
           const outletNoteHtml = item.outletNote
             ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.outletNote)}</p>`
             : '';
+          const consolidatedNoteHtml = item.consolidatedNote
+            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.consolidatedNote)}</p>`
+            : '';
           const bulletsHtml = item.bullets
             .map((b) => {
               const bulletNoteHtml = b.note
@@ -92,7 +101,7 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
             ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
             : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${headlineSourceHtml}${outletNoteHtml}${bulletsHtml}${backgroundHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${headlineSourceHtml}${outletNoteHtml}${consolidatedNoteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -131,6 +140,8 @@ export function buildReportSections(
     const outletNote = candidate.isMultiOutlet
       ? `${candidate.outletCount}개 매체 보도 (${candidate.outletSourceIds.map(sourceDisplayName).join(', ')})`
       : null;
+    const consolidatedNote =
+      deep.consolidatedCount && deep.consolidatedCount > 1 ? `관련 보도 ${deep.consolidatedCount}건 통합` : null;
 
     const sectionName: SectionName = candidate.isMultiOutlet ? '다수매체 보도' : deep.category;
 
@@ -139,6 +150,7 @@ export function buildReportSections(
       headlineNote: deep.headlineNote,
       headlineSource: deep.headlineSource,
       outletNote,
+      consolidatedNote,
       bullets: deep.bullets,
       background: deep.background,
       isReference: deep.isReference,
@@ -301,6 +313,7 @@ export async function buildReportDocx(
       if (item.headlineNote) children.push(notePara(item.headlineNote));
       if (item.headlineSource) children.push(notePara(item.headlineSource));
       if (item.outletNote) children.push(notePara(item.outletNote));
+      if (item.consolidatedNote) children.push(notePara(item.consolidatedNote));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));
         if (bullet.note) children.push(notePara(bullet.note));
