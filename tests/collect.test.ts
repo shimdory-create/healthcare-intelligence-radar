@@ -118,6 +118,35 @@ describe('collectSource invalid-URL visibility', () => {
   });
 });
 
+describe('collectSource photo-caption filtering', () => {
+  it('skips a "[사진]"/"[포토]" title even on a tier-1 (always-kept) source, counting it separately', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    fetchSourceArticles.mockResolvedValue([
+      { title: '정상 기사', url: 'https://example.com/ok', snippet: '' },
+      { title: '[사진]영화관 찾은 박준석', url: 'https://example.com/photo1', snippet: '암살자(들) 시사회' },
+      { title: '[포토]VIP 시사회 현장', url: 'https://example.com/photo2', snippet: '' },
+    ]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.fetched).toBe(3);
+    expect(summary.inserted).toBe(1);
+    expect(summary.skippedPhotoCaption).toBe(2);
+  });
+
+  it('does not skip "[영상]" titles -- video content still carries real reporting', async () => {
+    const { collectSource } = await import('@/lib/collect');
+    fetchSourceArticles.mockResolvedValue([
+      { title: '[영상] HLB 담관암 신약, FDA 허가 앞두고 제품명 변경', url: 'https://example.com/vid', snippet: '' },
+    ]);
+
+    const summary = await collectSource(makeSource({ tier: 1 }));
+
+    expect(summary.skippedPhotoCaption).toBe(0);
+    expect(summary.inserted).toBe(1);
+  });
+});
+
 describe('collectSource batched dedup', () => {
   it('fetches existing-URL/title-day state in one call each, not per article', async () => {
     const { collectSource } = await import('@/lib/collect');

@@ -77,6 +77,20 @@ describe('matchTags', () => {
     expect(result.tags).not.toContain('암');
   });
 
+  it('excludeKeywords covers homographs of 암 (rock/assassination/nuance) discovered 2026-09-22', () => {
+    const cancerTag: TagDefinition[] = [
+      {
+        tag: '암',
+        keywords: ['암'],
+        excludeKeywords: ['암살', '석회암', '화강암', '현무암', '명암', '암초', '암반', '암실', '암전', '암홀딩스'],
+      },
+    ];
+    expect(matchTags('영화 암살자(들) VIP 시사회 개최', cancerTag).tags).toEqual([]);
+    expect(matchTags('고대 로마 석회암 보드게임판 발굴', cancerTag).tags).toEqual([]);
+    expect(matchTags('반도체 설계업체 암홀딩스(ARM) 주가 3%↑', cancerTag).tags).toEqual([]);
+    expect(matchTags('IMA 상품의 명암을 짚었다', cancerTag).tags).toEqual([]);
+  });
+
   it('a weak tag alongside a strong match counts normally toward the score', () => {
     const mixedTags: TagDefinition[] = [
       { tag: '보험', keywords: ['보험'], weak: true },

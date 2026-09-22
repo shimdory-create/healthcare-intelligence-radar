@@ -57,6 +57,25 @@ describe('getCandidatesForReport', () => {
     expect(result[0].isMultiOutlet).toBe(true);
   });
 
+  it('does not mark a non-high candidate promoted via ALWAYS_INCLUDE_TAGS (single outlet) as multi-outlet', async () => {
+    const { getCandidatesForReport } = await import('@/lib/reportCandidates');
+    getReportCandidates.mockResolvedValue([
+      {
+        id: 3,
+        title: 'V',
+        url: 'https://e.com/3',
+        tags: ['삼성서울병원'],
+        priority: 'low',
+        outletCount: 1,
+        outletSourceIds: ['docdocdoc'],
+      },
+    ]);
+
+    const result = await getCandidatesForReport(['2026-09-14']);
+
+    expect(result[0].isMultiOutlet).toBe(false);
+  });
+
   it('passes the collected dates through to the DB query unchanged', async () => {
     const { getCandidatesForReport } = await import('@/lib/reportCandidates');
     getReportCandidates.mockResolvedValue([]);

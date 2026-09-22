@@ -11,7 +11,20 @@ export interface TagDefinition {
 }
 
 export const TAGS: TagDefinition[] = [
-  { tag: '암', keywords: ['암'], excludeKeywords: ['암호', '암울', '암매장', '영암'] },
+  // a single free-floating syllable is unusually collision-prone in Korean -- 암 also appears
+  // in dozens of unrelated compounds (석회암/화강암/현무암 = types of rock, 암살 = assassination,
+  // 명암 = light/shade or nuance, 암초 = reef/snag, 암반 = bedrock, 암실/암전 = darkroom/blackout,
+  // and even company-name transliterations like Arm Holdings -> "암홀딩스"). Found live
+  // 2026-09-22: a single chosunbiz movie-premiere photo gallery ("암살자(들)") plus a handful of
+  // unrelated finance/science blurbs got tagged '암' and cluttered the 참고 band. excludeKeywords
+  // is a losing whack-a-mole game against this many homographs, but it's the same mechanism
+  // already used for 암호/암울/암매장/영암, so new discoveries get appended here rather than
+  // switched to a different mechanism.
+  {
+    tag: '암',
+    keywords: ['암'],
+    excludeKeywords: ['암호', '암울', '암매장', '영암', '암살', '석회암', '화강암', '현무암', '명암', '암초', '암반', '암실', '암전', '암홀딩스'],
+  },
   { tag: '심뇌혈관', keywords: ['심뇌혈관', '심혈관', '뇌혈관', '심근경색', '뇌졸중'] },
   { tag: '중증질환', keywords: ['중증질환'] },
   { tag: '비만', keywords: ['비만'] },

@@ -20,8 +20,16 @@ export interface CollectionSummary {
    *  to this same guard for two weeks (fixed 2026-09-16) with no counter distinguishing it
    *  from normal dedup/tag skips -- see [[project-article-extraction-reliability]]. */
   skippedInvalidUrl: number;
+  /** titles opening with a "[사진]"/"[포토]" bracket are Korean-press convention for a bare
+   *  photo caption, not an article -- the body text is throwaway boilerplate (found live
+   *  2026-09-22: chosunbiz's "[사진]" photo-gallery items for a single movie premiere flooded
+   *  ~60 near-duplicate rows, all riding in on a shared caption that happened to tag-match).
+   *  Distinct content type from "[영상]" (video), which does carry real reporting and is kept. */
+  skippedPhotoCaption: number;
   error: string | null;
 }
+
+const PHOTO_CAPTION_PREFIX = /^\[(사진|포토)/;
 
 /** same UTC-day bucketing as db.ts's getExistingTitleDayKeys/old findSameDayTitleDuplicate --
  *  kept in one place so a candidate's key always matches how the DB rows were bucketed. */
@@ -39,6 +47,7 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
     skippedDuplicate: 0,
     skippedNoTagMatch: 0,
     skippedInvalidUrl: 0,
+    skippedPhotoCaption: 0,
     error: null,
   };
 
@@ -55,6 +64,10 @@ export async function collectSource(source: SourceConfig): Promise<CollectionSum
     for (const a of fetched) {
       if (!/^https?:\/\//i.test(a.url)) {
         summary.skippedInvalidUrl++;
+        continue;
+      }
+      if (PHOTO_CAPTION_PREFIX.test(a.title.trim())) {
+        summary.skippedPhotoCaption++;
         continue;
       }
       candidates.push({ a, titleNorm: normalizeTitle(a.title), publishedAt: a.publishedAt ?? new Date() });
@@ -130,6 +143,7 @@ function collectSourceWithBudget(source: SourceConfig): Promise<CollectionSummar
           skippedDuplicate: 0,
           skippedNoTagMatch: 0,
           skippedInvalidUrl: 0,
+          skippedPhotoCaption: 0,
           error: 'source budget exceeded',
         }),
       SOURCE_BUDGET_MS,
