@@ -749,3 +749,31 @@ export async function getRecentPipelineRuns(limit = 20): Promise<PipelineRunRow[
     hasError: r.has_error,
   }));
 }
+
+/** how long collected data is kept before automatic deletion -- chosen 2026-09-23 so this
+ *  Supabase free-tier project (500MB storage cap) never needs manual intervention: growth was
+ *  measured at ~0.9MB/day, so a rolling 1-year window stabilizes around ~330MB indefinitely
+ *  instead of growing unbounded. Nothing in the app reads articles this old (report candidates
+ *  only look back a few days via getReportCandidates' collectedDates, and duplicate-of
+ *  clustering is same-day only), so pruning them is safe. */
+export const DATA_RETENTION_DAYS = 365;
+
+export interface PruneResult {
+  articlesDeleted: number;
+  pipelineRunsDeleted: number;
+}
+
+/** deletes articles (and their ai_analysis rows, via the FK's `on delete cascade`) and
+ *  pipeline_runs older than DATA_RETENTION_DAYS. A survivor and its same-day duplicates always
+ *  share the same collected_at day (see duplicates.ts's same-day clustering), so a single
+ *  age-based DELETE never orphans a `duplicate_of_id` reference -- both sides of the reference
+ *  age out together. Safe to call every day; a no-op once nothing has aged past the window. */
+export async function pruneOldData(): Promise<PruneResult> {
+  const articlesResult = await sql`
+    delete from articles where collected_at < now() - (${DATA_RETENTION_DAYS} || ' days')::interval
+  `;
+  const pipelineRunsResult = await sql`
+    delete from pipeline_runs where started_at < now() - (${DATA_RETENTION_DAYS} || ' days')::interval
+  `;
+  return { articlesDeleted: articlesResult.count, pipelineRunsDeleted: pipelineRunsResult.count };
+}

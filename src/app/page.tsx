@@ -8,12 +8,16 @@ import {
   getPriorityCounts,
   getAiAnalysesForArticles,
   getDuplicatesOf,
+  getRecentPipelineRuns,
+  getSourceHealth,
   type ArticleFilters,
   type PriorityFilter,
 } from '@/lib/db';
 import { formatKstDate } from '@/lib/dateFormat';
+import { computeSystemHealthIssues } from '@/lib/systemHealth';
 import { ArticleList } from '@/components/ArticleList';
 import { FilterBar } from '@/components/FilterBar';
+import { SystemHealthBanner } from '@/components/SystemHealthBanner';
 
 const PAGE_SIZE = 50;
 const VALID_PRIORITIES: PriorityFilter[] = ['high', 'medium', 'low', 'all'];
@@ -52,13 +56,16 @@ export default async function HomePage({
     collectedDate,
   };
 
-  const [{ articles, hasNextPage }, totalCount, facets, lastCollectedAt, counts] = await Promise.all([
+  const [{ articles, hasNextPage }, totalCount, facets, lastCollectedAt, counts, recentRuns, sourceHealth] = await Promise.all([
     getRecentArticles({ ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
     getArticlesTotalCount(filters),
     getAvailableFacets(filters),
     getLastCollectedAt(),
     getPriorityCounts(collectedDate),
+    getRecentPipelineRuns(30),
+    getSourceHealth(),
   ]);
+  const healthIssues = computeSystemHealthIssues(recentRuns, sourceHealth);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const analyses = await getAiAnalysesForArticles(articles.map((a) => a.id));
   const analysesById = new Map(analyses.map((a) => [a.articleId, a]));
@@ -97,6 +104,7 @@ export default async function HomePage({
       <p className="text-muted-foreground mb-4 text-xs">
         {basisLabel} 기준 조회 · 총 {counts.total}건 (🔴 높음 {counts.high} · 🟡 보통 {counts.medium} · ⚪ 참고 {counts.low}) · 🤖 AI 분석완료 {counts.aiAnalyzed}건
       </p>
+      <SystemHealthBanner issues={healthIssues} />
       <FilterBar
         tier={tier}
         priority={priority}

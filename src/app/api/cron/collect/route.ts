@@ -9,6 +9,7 @@ import {
   getAppSetting,
   setAppSetting,
   recordPipelineRun,
+  pruneOldData,
   type ArticleRow,
   type PriorityCounts,
 } from '@/lib/db';
@@ -215,5 +216,13 @@ export async function GET(req: NextRequest) {
     kakaoResult: kakao,
   }).catch(() => {});
 
-  return NextResponse.json({ summary, email, kakao, ai, dedupe, report });
+  // once-daily retention sweep -- keeps this Supabase free-tier project's storage from growing
+  // unbounded forever (see pruneOldData's doc comment). Runs after everything else so a slow
+  // prune never competes with the time-critical report/send work; failure here must never fail
+  // the whole route, same reasoning as recordPipelineRun above.
+  const prune = await pruneOldData()
+    .then((r) => `articles ${r.articlesDeleted}, pipeline_runs ${r.pipelineRunsDeleted}`)
+    .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+  return NextResponse.json({ summary, email, kakao, ai, dedupe, report, prune });
 }
