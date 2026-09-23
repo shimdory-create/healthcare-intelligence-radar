@@ -17,6 +17,14 @@ export interface CandidateDeepResult {
    *  the dropped items with no visible sign multiple sources covered the same event. Absent
    *  (undefined) for an item that wasn't part of any consolidation group. */
   consolidatedCount?: number;
+  /** distinct source ids across every candidate the consolidation group merged -- lets
+   *  report.ts name the outlets the same way outletNote does for the DB-level multi-outlet
+   *  path, so a "관련 보도 N건 통합" trace isn't just a bare count (user request 2026-09-23:
+   *  "다수매체 보도처럼 어디 어디 언급되었는지도 적어줘"). Each merged candidate can itself
+   *  already represent more than one outlet (its own duplicate-group outletSourceIds), so
+   *  this is a union across all of them, not just one id per merged candidate. Set alongside
+   *  consolidatedCount, same undefined-when-not-merged convention. */
+  consolidatedOutletSourceIds?: string[];
 }
 
 /** why a candidate has no entry in analyzeCandidatesDeep's results map -- surfaced in the
@@ -46,6 +54,7 @@ export async function analyzeCandidatesDeep(
 ): Promise<DeepAnalysisOutcome> {
   const results = new Map<number, CandidateDeepResult>();
   const skipped: DeepAnalysisSkip[] = [];
+  const candidatesById = new Map(candidates.map((c) => [c.id, c]));
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
@@ -88,7 +97,8 @@ export async function analyzeCandidatesDeep(
     const richest = group.reduce((best, id) =>
       (results.get(id)!.bullets.length > results.get(best)!.bullets.length ? id : best),
     );
-    results.set(richest, { ...results.get(richest)!, consolidatedCount: group.length });
+    const consolidatedOutletSourceIds = [...new Set(group.flatMap((id) => candidatesById.get(id)!.outletSourceIds))];
+    results.set(richest, { ...results.get(richest)!, consolidatedCount: group.length, consolidatedOutletSourceIds });
     for (const id of group) {
       if (id === richest) continue;
       results.delete(id);

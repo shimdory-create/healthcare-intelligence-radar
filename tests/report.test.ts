@@ -278,15 +278,22 @@ describe('buildReportSections', () => {
     expect(sections[0].items[0].outletNote).toBeNull();
   });
 
-  it('renders a "관련 보도 N건 통합" note when consolidatedCount is set', () => {
+  it('renders a "관련 보도 N건 통합" note naming the merged outlets when consolidatedCount is set', () => {
     const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
     const deep = new Map<number, CandidateDeepResult>([
-      [1, { articleId: 1, category: '국내 산업', headline: 'h', headlineNote: null, headlineSource: null, bullets: [], background: null, isReference: false, isRelevant: true, consolidatedCount: 3 }],
+      [
+        1,
+        {
+          articleId: 1, category: '국내 산업', headline: 'h', headlineNote: null, headlineSource: null,
+          bullets: [], background: null, isReference: false, isRelevant: true,
+          consolidatedCount: 3, consolidatedOutletSourceIds: ['yna', 'chosun', 'donga'],
+        },
+      ],
     ]);
 
     const sections = buildReportSections(candidates, deep);
 
-    expect(sections[0].items[0].consolidatedNote).toBe('관련 보도 3건 통합');
+    expect(sections[0].items[0].consolidatedNote).toBe('관련 보도 3건 통합 (연합뉴스, 조선일보, 동아일보)');
   });
 
   it('leaves consolidatedNote null when consolidatedCount is absent or 1', () => {
@@ -496,5 +503,41 @@ describe('buildReportDocx', () => {
     const { buildReportDocx } = await import('@/lib/report');
     const buffer = await buildReportDocx([], "'26.09.14 (월)", '헬스케어사업팀');
     expect(buffer.subarray(0, 2).toString('ascii')).toBe('PK');
+  });
+
+  it('renders every "* " note line in blue but leaves the "※ " background line black (user request 2026-09-23)', async () => {
+    const { buildReportDocx } = await import('@/lib/report');
+    const JSZip = (await import('jszip')).default;
+    const sections = [
+      {
+        title: '국내 산업',
+        items: [
+          {
+            headline: '테스트 헤드라인',
+            headlineNote: 'PoC: 기술실증', headlineSource: null,
+            outletNote: null, consolidatedNote: null,
+            bullets: [{ text: '사실 1', note: '용어 설명', subBullets: [{ text: '세부 1', note: '세부 용어' }] }],
+            background: '배경 정보 텍스트',
+            isReference: false,
+          },
+        ],
+      },
+    ];
+
+    const buffer = await buildReportDocx(sections, "'26.09.14 (월)", '헬스케어사업팀');
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file('word/document.xml')!.async('text');
+
+    // every "* " note run carries the blue color
+    const noteRunPattern = /<w:color w:val="0070C0"\/>(?:(?!<\/w:r>).)*?<w:t[^>]*>\* /g;
+    expect([...xml.matchAll(noteRunPattern)].length).toBe(3); // headlineNote, bullet note, sub-bullet note
+
+    // the "※ " background run does NOT carry that blue color
+    const backgroundRunMatch = xml.match(/<w:t[^>]*>※ 배경 정보 텍스트<\/w:t>/);
+    expect(backgroundRunMatch).not.toBeNull();
+    const backgroundRunStart = xml.lastIndexOf('<w:r>', backgroundRunMatch!.index);
+    const backgroundRunXml = xml.slice(backgroundRunStart, backgroundRunMatch!.index);
+    expect(backgroundRunXml).not.toContain('0070C0');
+    expect(backgroundRunXml).toContain('555555');
   });
 });

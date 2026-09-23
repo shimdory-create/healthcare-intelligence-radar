@@ -140,8 +140,12 @@ export function buildReportSections(
     const outletNote = candidate.isMultiOutlet
       ? `${candidate.outletCount}개 매체 보도 (${candidate.outletSourceIds.map(sourceDisplayName).join(', ')})`
       : null;
+    // names the merged-in outlets the same way outletNote does, instead of a bare count --
+    // user request 2026-09-23 ("다수매체 보도처럼 어디 어디 언급되었는지도 적어줘")
     const consolidatedNote =
-      deep.consolidatedCount && deep.consolidatedCount > 1 ? `관련 보도 ${deep.consolidatedCount}건 통합` : null;
+      deep.consolidatedCount && deep.consolidatedCount > 1
+        ? `관련 보도 ${deep.consolidatedCount}건 통합 (${(deep.consolidatedOutletSourceIds ?? []).map(sourceDisplayName).join(', ')})`
+        : null;
 
     const sectionName: SectionName = candidate.isMultiOutlet ? '다수매체 보도' : deep.category;
 
@@ -231,10 +235,17 @@ function headlinePara(text: string): Paragraph {
   });
 }
 
+// docx-only: every "* " glossary-note line (headline/outlet/consolidated/bullet/sub-bullet
+// notes all route through notePara/subNotePara) renders in blue so it visually reads as an
+// aside distinct from the black report body -- the "※ " background line is a different marker
+// (nicknamed 당구장표) and stays its existing color, not blue (user request 2026-09-23). Email
+// HTML (buildReportEmailHtml) is untouched -- blue is docx-only, per the same request.
+const NOTE_COLOR = '0070C0';
+
 function notePara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: NOTE_COLOR, characterSpacing: CHAR_SPACING }),
     ],
     spacing: { after: 60, ...SINGLE_LINE_SPACING },
     indent: { left: 800, hanging: 180 },
@@ -247,7 +258,7 @@ function notePara(text: string): Paragraph {
 function subNotePara(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: '555555', characterSpacing: CHAR_SPACING }),
+      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: NOTE_COLOR, characterSpacing: CHAR_SPACING }),
     ],
     spacing: { after: 60, ...SINGLE_LINE_SPACING },
     indent: { left: 1060, hanging: 180 },

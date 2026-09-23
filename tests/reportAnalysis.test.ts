@@ -116,11 +116,30 @@ describe('analyzeCandidatesDeep', () => {
       });
     consolidateSimilarStories.mockResolvedValue([[10, 11]]);
 
-    const { results, skipped } = await analyzeCandidatesDeep([makeCandidate({ id: 10 }), makeCandidate({ id: 11 })]);
+    const { results, skipped } = await analyzeCandidatesDeep([
+      makeCandidate({ id: 10, outletSourceIds: ['yna'] }),
+      makeCandidate({ id: 11, outletSourceIds: ['chosun'] }),
+    ]);
 
     expect(results.has(10)).toBe(false);
     expect(results.has(11)).toBe(true);
     expect(results.get(11)?.consolidatedCount).toBe(2);
     expect(skipped).toEqual([{ articleId: 10, reason: 'consolidated-duplicate' }]);
+  });
+
+  it('unions outlet source ids across every merged candidate (each may itself cover multiple outlets)', async () => {
+    const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
+    extractArticleText.mockResolvedValue('본문');
+    analyzeDeep
+      .mockResolvedValueOnce({ category: 'Global', headline: 'h1', bullets: [{ text: 'a', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true })
+      .mockResolvedValueOnce({ category: 'Global', headline: 'h2', bullets: [{ text: 'a', note: null, subBullets: [] }, { text: 'b', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true });
+    consolidateSimilarStories.mockResolvedValue([[20, 21]]);
+
+    const { results } = await analyzeCandidatesDeep([
+      makeCandidate({ id: 20, outletSourceIds: ['yna', 'chosun'] }),
+      makeCandidate({ id: 21, outletSourceIds: ['chosun', 'donga'] }),
+    ]);
+
+    expect(results.get(21)?.consolidatedOutletSourceIds?.sort()).toEqual(['chosun', 'donga', 'yna']);
   });
 });
