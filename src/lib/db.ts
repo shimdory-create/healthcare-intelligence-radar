@@ -385,15 +385,40 @@ export interface CandidateRow {
 // 꼭 담을 것" ask.
 const ALWAYS_INCLUDE_TAGS = ['삼성서울병원', '강북삼성병원'];
 
+// one item renders to roughly half a page in the docx (user-observed calibration 2026-09-23:
+// "스퀘어 하나가 반페이지... 스퀘어가 8개면 4장"), so 8 is the item count that targets a
+// 4-page minimum. Below this, a sparse-high day's report reads as noticeably thin.
+const MIN_REPORT_ITEMS = 8;
+
+function mapCandidateRow(r: any): CandidateRow {
+  return {
+    id: r.id,
+    title: r.title,
+    url: r.url,
+    tags: r.tags,
+    priority: r.priority,
+    outletCount: r.outlet_count,
+    outletSourceIds: r.outlet_source_ids,
+  };
+}
+
 /** candidates for the deep-analysis report pass: every 'high' survivor, plus every
  *  survivor (regardless of its own priority) whose duplicate group spans 3+ distinct outlets
  *  (its own source plus 2 or more other distinct sources among its grouped duplicates -- the
  *  same outlet posting a follow-up to its own story doesn't count as a second outlet), plus
  *  every survivor tagged with one of ALWAYS_INCLUDE_TAGS regardless of priority/outlet count.
  *  `collectedDates` lets a rollup day's report cover more than one calendar date in one call
- *  (see reportSchedule.ts). */
+ *  (see reportSchedule.ts).
+ *
+ *  If that primary set has fewer than MIN_REPORT_ITEMS candidates (a sparse-high day), backfills
+ *  with additional 'medium'-priority survivors -- ranked by outlet count then by the rule-based
+ *  tag-match score (`articles.score`, set at collection time and never overwritten by AI
+ *  enrichment, see updateArticlePriority's doc comment) -- up to the target count. No new AI
+ *  call: user explicitly chose this zero-cost ranking over an extra Gemini pass (2026-09-23) --
+ *  the backfilled candidates still go through the same is_relevant/is_reference deep-analysis
+ *  gates as everything else, so this only widens the candidate pool, not the quality bar. */
 export async function getReportCandidates(collectedDates: string[]): Promise<CandidateRow[]> {
-  const rows = await sql`
+  const primaryRows = await sql`
     select a.id, a.title, a.url, a.tags, a.priority,
       coalesce(array_length(o.outlet_source_ids, 1), 1) as outlet_count,
       coalesce(o.outlet_source_ids, array[a.source_id]) as outlet_source_ids
@@ -415,15 +440,34 @@ export async function getReportCandidates(collectedDates: string[]): Promise<Can
       )
     order by a.id
   `;
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    url: r.url,
-    tags: r.tags,
-    priority: r.priority,
-    outletCount: r.outlet_count,
-    outletSourceIds: r.outlet_source_ids,
-  }));
+
+  if (primaryRows.length >= MIN_REPORT_ITEMS) {
+    return primaryRows.map(mapCandidateRow);
+  }
+
+  const excludeIds = primaryRows.map((r) => r.id);
+  const backfillRows = await sql`
+    select a.id, a.title, a.url, a.tags, a.priority,
+      coalesce(array_length(o.outlet_source_ids, 1), 1) as outlet_count,
+      coalesce(o.outlet_source_ids, array[a.source_id]) as outlet_source_ids
+    from articles a
+    left join lateral (
+      select array_agg(distinct x.source_id) as outlet_source_ids
+      from (
+        select a.source_id
+        union all
+        select b.source_id from articles b where b.duplicate_of_id = a.id
+      ) x
+    ) o on true
+    where (a.collected_at at time zone 'Asia/Seoul')::date = any(${collectedDates}::date[])
+      and a.duplicate_of_id is null
+      and a.priority = 'medium'
+      and not (a.id = any(${excludeIds}::int[]))
+    order by coalesce(array_length(o.outlet_source_ids, 1), 1) desc, a.score desc, a.id
+    limit ${MIN_REPORT_ITEMS - primaryRows.length}
+  `;
+
+  return [...primaryRows, ...backfillRows].map(mapCandidateRow);
 }
 
 /** total matching rows for the given filters -- used only to size numbered pagination */
