@@ -5,25 +5,27 @@ import { sourceDisplayName } from './sourceLookup';
 
 export interface ReportBullet {
   text: string;
-  /** term-glossary note for this specific bullet -- rendered directly under it, so the
+  /** term-glossary notes for this specific bullet -- rendered directly under it, so the
    *  explanation always sits next to the term it's explaining rather than in one fixed slot
-   *  under the headline regardless of which bullet actually used the term. */
-  note: string | null;
-  /** each sub-bullet can carry its own term-glossary note too (2026-09-21), same reasoning as
-   *  a bullet's own note -- an explanation sits next to the specific sub-bullet that used the
+   *  under the headline regardless of which bullet actually used the term. An array (not a
+   *  single string) since one bullet's text can name more than one unfamiliar term needing
+   *  separate explanations (2026-09-23). */
+  notes: string[];
+  /** each sub-bullet can carry its own term-glossary notes too (2026-09-21), same reasoning as
+   *  a bullet's own notes -- an explanation sits next to the specific sub-bullet that used the
    *  term, not off in one shared slot. */
-  subBullets: { text: string; note: string | null }[];
+  subBullets: { text: string; notes: string[] }[];
 }
 
 export interface ReportItem {
   headline: string;
-  /** term-glossary note for a word in the headline itself (not covered by any bullet's own
-   *  note) -- rendered directly under the headline, before outletNote/bullets. Null when
-   *  nothing in the headline needs explaining. */
-  headlineNote: string | null;
+  /** term-glossary notes for words in the headline itself (not covered by any bullet's own
+   *  notes) -- rendered directly under the headline, before outletNote/bullets. Empty array
+   *  when nothing in the headline needs explaining. */
+  headlineNotes: string[];
   /** citation naming the specific report/analysis this item's content is based on, when the
    *  article explicitly cites one (2026-09-21, see gemini.ts's DeepAnalysisResult.headlineSource
-   *  doc comment) -- a different concept from headlineNote, rendered as its own line under it. */
+   *  doc comment) -- a different concept from headlineNotes, rendered as its own line under it. */
   headlineSource: string | null;
   /** the "N개 매체 보도 (매체1, 매체2, ...)" line for multi-outlet items -- distinct from a
    *  bullet's own term-glossary `note`; computed from the candidate's duplicate-group data,
@@ -64,14 +66,21 @@ function escapeHtml(text: string): string {
  *  blocked the earlier PNG-preview version of this email even though the same content as an
  *  attached docx or as this HTML passed -- a rendered image that's mostly dense Korean text is
  *  a classic phishing-image signature, so the report is no longer screenshotted for email. */
+// renders each note as its own "* " line at the given left indent -- shared by headline/bullet/
+// sub-bullet notes, which only differ in indent depth. Multiple notes stack as consecutive
+// lines (2026-09-23: a line can name more than one unfamiliar term).
+function notesHtml(notes: string[], indentPx: number): string {
+  return notes
+    .map((n) => `<p style="margin:2px 0 0 ${indentPx}px;font-size:11px;color:#777;">* ${escapeHtml(n)}</p>`)
+    .join('');
+}
+
 export function buildReportEmailHtml(sections: ReportSection[], dateLabel: string): string {
   const sectionsHtml = sections
     .map((section, i) => {
       const itemsHtml = section.items
         .map((item) => {
-          const headlineNoteHtml = item.headlineNote
-            ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.headlineNote)}</p>`
-            : '';
+          const headlineNotesHtml = notesHtml(item.headlineNotes, 24);
           const headlineSourceHtml = item.headlineSource
             ? `<p style="margin:2px 0 0 24px;font-size:11px;color:#777;">* ${escapeHtml(item.headlineSource)}</p>`
             : '';
@@ -83,25 +92,21 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
             : '';
           const bulletsHtml = item.bullets
             .map((b) => {
-              const bulletNoteHtml = b.note
-                ? `<p style="margin:2px 0 0 36px;font-size:11px;color:#777;">* ${escapeHtml(b.note)}</p>`
-                : '';
+              const bulletNotesHtml = notesHtml(b.notes, 36);
               const subHtml = b.subBullets
                 .map((s) => {
-                  const subNoteHtml = s.note
-                    ? `<p style="margin:2px 0 0 52px;font-size:11px;color:#777;">* ${escapeHtml(s.note)}</p>`
-                    : '';
-                  return `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s.text)}</p>${subNoteHtml}`;
+                  const subNotesHtml = notesHtml(s.notes, 52);
+                  return `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s.text)}</p>${subNotesHtml}`;
                 })
                 .join('');
-              return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${bulletNoteHtml}${subHtml}`;
+              return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${bulletNotesHtml}${subHtml}`;
             })
             .join('');
           const backgroundHtml = item.background
             ? `<p style="margin:4px 0 0;font-size:11px;color:#777;">※ ${escapeHtml(item.background)}</p>`
             : '';
           const headlineText = item.isReference ? `(참고) ${item.headline}` : item.headline;
-          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNoteHtml}${headlineSourceHtml}${outletNoteHtml}${consolidatedNoteHtml}${bulletsHtml}${backgroundHtml}`;
+          return `<p style="margin:10px 0 2px;font-size:13px;font-weight:600;">□ ${escapeHtml(headlineText)}</p>${headlineNotesHtml}${headlineSourceHtml}${outletNoteHtml}${consolidatedNoteHtml}${bulletsHtml}${backgroundHtml}`;
         })
         .join('');
       return `<h3 style="margin:16px 0 4px;font-size:14px;">${i + 1}. ${escapeHtml(section.title)}</h3>${itemsHtml}`;
@@ -151,7 +156,7 @@ export function buildReportSections(
 
     byName.get(sectionName)!.push({
       headline: deep.headline,
-      headlineNote: deep.headlineNote,
+      headlineNotes: deep.headlineNotes,
       headlineSource: deep.headlineSource,
       outletNote,
       consolidatedNote,
@@ -321,16 +326,16 @@ export async function buildReportDocx(
     children.push(sectionHeadingPara(`${sectionIndex + 1}. ${section.title}`));
     for (const item of section.items) {
       children.push(headlinePara(item.isReference ? `(참고) ${item.headline}` : item.headline));
-      if (item.headlineNote) children.push(notePara(item.headlineNote));
+      for (const note of item.headlineNotes) children.push(notePara(note));
       if (item.headlineSource) children.push(notePara(item.headlineSource));
       if (item.outletNote) children.push(notePara(item.outletNote));
       if (item.consolidatedNote) children.push(notePara(item.consolidatedNote));
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));
-        if (bullet.note) children.push(notePara(bullet.note));
+        for (const note of bullet.notes) children.push(notePara(note));
         for (const sub of bullet.subBullets) {
           children.push(subBulletPara(sub.text));
-          if (sub.note) children.push(subNotePara(sub.note));
+          for (const note of sub.notes) children.push(subNotePara(note));
         }
       }
       if (item.background) children.push(backgroundPara(item.background));

@@ -139,26 +139,33 @@ export interface DeepAnalysisResult {
   /** report-style headline, rewritten by Gemini rather than reusing the source article's own
    *  (news-style) title -- see buildDeepPrompt's headline rules. */
   headline: string;
-  /** term-glossary note for a word that appears in the headline itself but not in any bullet
-   *  (e.g. "PoC", "소송금융") -- without this, such a term never gets explained anywhere,
-   *  since a bullet's own note is restricted to terms literally present in that bullet's
-   *  text. Same whitelist/no-fabrication rules as a bullet's note. Null when nothing applies. */
-  headlineNote: string | null;
+  /** term-glossary notes for words that appear in the headline itself but not in any bullet
+   *  (e.g. "PoC", "소송금융") -- without this, such terms never get explained anywhere, since
+   *  a bullet's own note is restricted to terms literally present in that bullet's text. Same
+   *  whitelist/no-fabrication rules as a bullet's note. An array (not a single string) because
+   *  a line can name more than one unfamiliar term needing separate explanations (2026-09-23,
+   *  see the 기획실 benchmark doc's stacked "*"/"**" notes -- e.g. "BXPE 또는 Tactical
+   *  Opportunities" needed two different explanations on one line). Empty array when nothing
+   *  applies. */
+  headlineNotes: string[];
   /** citation for the specific named report/analysis this article's content is based on (e.g.
    *  "금융분야 인공지능 가이드라인 개정과 보험산업의 대응 과제 (보험연구원 9.21일)") -- a
-   *  DIFFERENT concept from headlineNote: this isn't explaining a term, it's naming the
+   *  DIFFERENT concept from headlineNotes: this isn't explaining a term, it's naming the
    *  underlying source document. Seen in the 기획실 benchmark doc (2026-09-21); most articles
-   *  don't cite a specific named report, so this is null far more often than headlineNote is.
-   *  Deliberately not subject to dropOrphanedNote's literal-term-in-text guard, since it's not
+   *  don't cite a specific named report, so this is null far more often than headlineNotes is.
+   *  Deliberately not subject to dropOrphanedNotes' literal-term-in-text guard, since it's not
    *  a "term: definition" pair to begin with. */
   headlineSource: string | null;
-  /** each bullet carries its own optional term-glossary note (rendered directly under that
-   *  bullet, not off in a fixed slot under the headline) so a note always sits next to the
-   *  term it's explaining, whichever bullet that happens to be. Each sub_bullet can likewise
-   *  carry its own note (2026-09-21, matching the 기획실 benchmark doc's pattern of annotating
-   *  a specific term/date inside a sub-bullet, e.g. "* '26.7.28 발생" right after a named
-   *  event) -- same dropOrphanedNote guard, checked against that sub_bullet's own text. */
-  bullets: { text: string; note: string | null; subBullets: { text: string; note: string | null }[] }[];
+  /** each bullet carries its own term-glossary notes (rendered directly under that bullet, not
+   *  off in a fixed slot under the headline) so a note always sits next to the term it's
+   *  explaining, whichever bullet that happens to be. Each sub_bullet can likewise carry its
+   *  own notes (2026-09-21, matching the 기획실 benchmark doc's pattern of annotating a
+   *  specific term/date inside a sub-bullet, e.g. "* '26.7.28 발생" right after a named event)
+   *  -- same dropOrphanedNotes guard, checked against that sub_bullet's own text. Both are
+   *  arrays (not a single string), same reasoning as headlineNotes -- a bullet naming two
+   *  unfamiliar terms needs two separate notes, not one squeezed together (2026-09-23, see
+   *  the 기획실 benchmark doc's stacked "*"/"**" notes on one line). */
+  bullets: { text: string; notes: string[]; subBullets: { text: string; notes: string[] }[] }[];
   /** background/context info about a company or institution named in the article (e.g. a past
    *  certification, an unrelated business line) -- rendered with a "※ " prefix after the
    *  item's bullets, distinct from a bullet's own term-glossary note. Null when nothing
@@ -183,7 +190,10 @@ const DEEP_RESPONSE_SCHEMA = {
   properties: {
     category: { type: 'string', enum: ['국내 보험·제도', '국내 산업', 'Global'] },
     headline: { type: 'string' },
-    headline_note: { type: 'string' },
+    // array, not a single string -- a headline can name more than one unfamiliar term (see
+    // DeepAnalysisResult.headlineNotes' doc comment); maxItems is a generous cap, not a target,
+    // same "don't pad" spirit as bullets/sub_bullets below
+    headline_notes: { type: 'array', maxItems: 3, items: { type: 'string' } },
     headline_source: { type: 'string' },
     bullets: {
       type: 'array',
@@ -192,7 +202,7 @@ const DEEP_RESPONSE_SCHEMA = {
         type: 'object',
         properties: {
           text: { type: 'string' },
-          note: { type: 'string' },
+          notes: { type: 'array', maxItems: 3, items: { type: 'string' } },
           // 2 is the normal cap; 5 covers the exception case (see buildDeepPrompt's sub_bullets
           // rule) where a single announcement bundles several distinct components worth listing
           sub_bullets: {
@@ -200,12 +210,12 @@ const DEEP_RESPONSE_SCHEMA = {
             maxItems: 5,
             items: {
               type: 'object',
-              properties: { text: { type: 'string' }, note: { type: 'string' } },
-              required: ['text', 'note'],
+              properties: { text: { type: 'string' }, notes: { type: 'array', maxItems: 3, items: { type: 'string' } } },
+              required: ['text', 'notes'],
             },
           },
         },
-        required: ['text', 'note', 'sub_bullets'],
+        required: ['text', 'notes', 'sub_bullets'],
       },
     },
     background: { type: 'string' },
@@ -215,7 +225,7 @@ const DEEP_RESPONSE_SCHEMA = {
   required: [
     'category',
     'headline',
-    'headline_note',
+    'headline_notes',
     'headline_source',
     'bullets',
     'background',
@@ -267,13 +277,14 @@ ${fullText.slice(0, 6000)}
 - headline: 기사 원제목을 그대로 쓰지 말고, 위 문체 규칙에 따라 핵심 사실 1~2개를 "·" 또는 쉼표로 묶어 압축한 보고서용 제목으로 새로 작성 (예: "심평원, 재평가 설명회 개최·제외 품목은 68% 가산 배제"). **bullets[0]의 text를 단어만 바꿔 반복하지 말 것** -- headline은 "무엇이 있었는지"를 압축하고, bullets[0]은 거기 없는 구체적 판단·수치·대상을 담아야 함. 잘못된 예:
   - headline "심평원, 제7차 암질환심의위원회 결과 공개·브렌랩주 등 급여기준 설정" 인데 bullets[0].text가 "심평원, 제7차 암질환심의위원회에서 항암제 급여기준 심의 결과 발표"처럼 같은 내용을 다른 표현으로 되풀이 -- 이 경우 bullets[0]에는 실제 급여기준이 정해진/정해지지 않은 약제명처럼 headline에 없는 세부 내용이 들어가야 함
   - headline "질병청, 코로나19 예방접종 필수 전환·10월 12일부터 고위험군 대상 순차 시행" 인데 bullets[0].text가 "코로나19 예방접종을 임시에서 필수 예방접종으로 전환하고 10월 12일부터 고위험군 대상 순차 시행"처럼 거의 같은 문장을 반복 -- 이 경우 bullets[0]에는 접종 백신 종류·물량, 동시접종 권고처럼 headline에 없는 세부 내용이 들어가야 함 (실제 사고 사례: 그런 내용이 bullets[1]에 있었는데 bullets[0]에 들어갔어야 했음)
-- headline_note: headline에 실제로 등장하는 전문용어·낯선 약어(예: "PoC", "소송금융") 또는 생소한 기업·법인·기관명(예: "Allianz Partners", "파라메타")에 대한 한 줄 설명, "용어: 설명" 형식. bullets의 note와 같은 규칙 -- **headline에 문자 그대로 등장하는 용어만 설명할 것. 기사 주제와 관련은 있지만 headline이나 어느 bullet에도 실제로 쓰이지 않은 배경지식 용어는 설명하지 말 것.** 잘못된 예(실제 사고 사례): headline이 "SK바이오팜, 퍼스트바이오 파킨슨병 후보물질 도입·오픈이노베이션 가동"이고 bullets 어디에도 "DMT"라는 단어가 없는데 headline_note에 "DMT: 질병의 진행 자체를 늦추는 질병조절치료제"라고 설명 -- 파킨슨병 신약과 관련은 있는 배경지식이지만 headline/bullets 어디에도 "DMT"라는 단어 자체가 없으므로 이 경우 headline_note는 빈 문자열이어야 함. 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말 것. headline에 설명이 필요한 용어가 없으면 빈 문자열("")
-- headline_source: headline_note와 다른 개념 -- 용어 설명이 아니라, **이 기사 내용이 특정 기관의 명시적으로 이름 붙은 보고서·자료에 근거한 경우에만** 그 자료명을 인용. 형식은 "자료명 (발행처·날짜)", 예: "금융분야 인공지능 가이드라인 개정과 보험산업의 대응 과제 (보험연구원 9.21일)". 기사가 단순히 어떤 사건·발표를 보도하는 것이고 특정 이름 붙은 보고서를 근거로 삼은 게 아니면 반드시 빈 문자열("") -- 대부분의 기사는 여기 해당하므로 빈 문자열이 기본값. 본문에 "OOO 보고서에 따르면", "OOO가 발표한 자료에서" 처럼 명시적으로 특정 자료를 인용하는 경우에만 채울 것.
-- **note 중복 설명 금지 (headline_note, bullets[].note, sub_bullets[].note 모두 해당):** 같은 아이템 안에서 어떤 용어를 이미 어딘가의 note에서 설명했다면, 뒤에 나오는 note에서 같은 용어를 또 설명하지 말 것 -- 그 용어가 여러 bullet/sub_bullet의 text에 반복해서 등장하더라도, 설명은 **최초 등장하는 note 한 곳에만** 달고 나머지는 빈 문자열(""). 잘못된 예(실제 사고 사례): "KCD"라는 용어가 bullets[0]과 sub_bullets 양쪽에 등장했는데, bullets[0].note에 "KCD: 질병코드"라고 이미 설명해놓고 sub_bullets의 note에도 똑같이 "KCD: 질병코드"를 또 씀 -- 이 경우 sub_bullets의 note는 빈 문자열이어야 함. 또한 이미 문맥상 자명하거나(예: "삼성 가족 대표 건강보험"처럼 이름 자체가 내용을 설명하는 상품명) 본문의 다른 부분에서 이미 풀어 쓴 내용을 note에서 다시 설명하는 것도 피할 것 -- note는 "낯설어서 모르면 이해가 안 되는 용어"에만 쓰고, 이미 이해 가능한 내용을 또 설명하는 용도가 아님.
+- headline_notes: headline에 실제로 등장하는 전문용어·낯선 약어(예: "PoC", "소송금융") 또는 생소한 기업·법인·기관명(예: "Allianz Partners", "파라메타")에 대한 한 줄 설명들의 배열, 각 원소는 "용어: 설명" 형식. **배열인 이유: headline 한 줄에 낯선 용어가 두 개 이상 나오면 각각 별도 원소로 설명할 것** -- 하나로 뭉뚱그리지 말고 "용어1: 설명1", "용어2: 설명2"처럼 나눠 담음(2026-09-23, 기획실 벤치마킹 문서에서 한 줄에 용어가 여럿일 때 "*"/"**"로 각각 따로 설명하는 패턴 확인). bullets의 notes와 같은 규칙 -- **headline에 문자 그대로 등장하는 용어만 설명할 것. 기사 주제와 관련은 있지만 headline이나 어느 bullet에도 실제로 쓰이지 않은 배경지식 용어는 설명하지 말 것.** 잘못된 예(실제 사고 사례): headline이 "SK바이오팜, 퍼스트바이오 파킨슨병 후보물질 도입·오픈이노베이션 가동"이고 bullets 어디에도 "DMT"라는 단어가 없는데 headline_notes에 "DMT: 질병의 진행 자체를 늦추는 질병조절치료제"를 담음 -- 파킨슨병 신약과 관련은 있는 배경지식이지만 headline/bullets 어디에도 "DMT"라는 단어 자체가 없으므로 이 경우 headline_notes는 빈 배열이어야 함. 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말 것. headline에 설명이 필요한 용어가 없으면 빈 배열([])
+- headline_source: headline_notes와 다른 개념 -- 용어 설명이 아니라, **이 기사 내용이 특정 기관의 명시적으로 이름 붙은 보고서·자료에 근거한 경우에만** 그 자료명을 인용. 형식은 "자료명 (발행처·날짜)", 예: "금융분야 인공지능 가이드라인 개정과 보험산업의 대응 과제 (보험연구원 9.21일)". 기사가 단순히 어떤 사건·발표를 보도하는 것이고 특정 이름 붙은 보고서를 근거로 삼은 게 아니면 반드시 빈 문자열("") -- 대부분의 기사는 여기 해당하므로 빈 문자열이 기본값. 본문에 "OOO 보고서에 따르면", "OOO가 발표한 자료에서" 처럼 명시적으로 특정 자료를 인용하는 경우에만 채울 것.
+- **note 중복 설명 금지 (headline_notes, bullets[].notes, sub_bullets[].notes 모두 해당):** 같은 아이템 안에서 어떤 용어를 이미 어딘가의 note에서 설명했다면, 뒤에 나오는 note에서 같은 용어를 또 설명하지 말 것 -- 그 용어가 여러 bullet/sub_bullet의 text에 반복해서 등장하더라도, 설명은 **최초 등장하는 note 한 곳에만** 담고 나머지는 배열에서 뺄 것. 잘못된 예(실제 사고 사례): "KCD"라는 용어가 bullets[0]과 sub_bullets 양쪽에 등장했는데, bullets[0].notes에 "KCD: 질병코드"라고 이미 설명해놓고 sub_bullets의 notes에도 똑같이 "KCD: 질병코드"를 또 담음 -- 이 경우 sub_bullets의 notes에는 이 원소를 넣지 말 것. 또한 이미 문맥상 자명하거나(예: "삼성 가족 대표 건강보험"처럼 이름 자체가 내용을 설명하는 상품명) 본문의 다른 부분에서 이미 풀어 쓴 내용을 note로 다시 설명하는 것도 피할 것 -- note는 "낯설어서 모르면 이해가 안 되는 용어"에만 쓰고, 이미 이해 가능한 내용을 또 설명하는 용도가 아님.
+- **외화 금액 원화 환산 (headline_notes/notes 공통 규칙):** bullets나 sub_bullets의 text에 원화 환산 없이 외화 금액(엔/달러/위안/유로 등)만 등장하면, 대략적인 원화 환산액을 note로 추가 (형식: "한화 약 X조 X천억원" 또는 "한화 약 X억원" 등). 단, **정확한 실시간 환율이 아니라 근사치이므로 반드시 "약"을 붙이고, 자신 있는 대략적 환율(예: 100엔≈900원, $1≈1,400원, 1위안≈190원 부근)로 계산할 수 있을 때만 채울 것 -- 환율 감각에 자신이 없으면 억지로 계산하지 말고 이 note는 생략(빈 배열)**. 이미 본문에 원화 환산액이 나와 있으면 그 값을 그대로 쓰고 새로 계산하지 말 것. 예: "'26.3월 말 기준 약 1조엔 규모" → note "한화 약 8조 8천억원 (환율 참고치)".
 - bullets: 최대 2개 (상한선일 뿐 목표 아님 -- 1개로 충분하면 1개만). 각 항목은:
   - text: 위 문체·분량 규칙을 따른, 핵심 판단·결정사항 한 줄 (두괄식 첫 번째가 가장 중요)
-  - note: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함) 또는 생소한 기업·법인명에 대한 한 줄 설명, "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 note도 비워둘 것). 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말고, 해당 없으면 빈 문자열(""). 예: 화이트리스트에 있는 "심평원"을 note에 "심평원: 건강보험심사평가원"처럼 설명하는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 note를 반드시 빈 문자열("")로 둘 것
-  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 보통 최대 2개 (상한선, 필요한 만큼만) -- **단, 하나의 발표/출시에 서로 다른 개별 구성요소(하위 서비스, 세부 상품 등)가 여러 개 묶여 있고 그 각각을 나열하는 것 자체가 핵심 정보인 경우(예: 하나의 통합 솔루션이 5개의 개별 서비스로 구성)엔 예외적으로 5개까지 나열 가능**. 그 외 일반적인 경우는 여전히 2개 이내로 압축. 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것. **이 예외는 상품/서비스 "출시·발표" 기사에만 적용** -- 국회·정부의 법률안·안건 의결처럼 여러 항목을 단순 열거하는 기사(예: "보건복지위, 법률안 88건 의결")는 예외 대상이 아님, 2개 이내로 가장 중요한 항목만 압축할 것. 잘못된 예: 의결된 법률안이 여러 건이라고 해서 각 법률안을 sub_bullets에 3개 이상 나열 -- 이 경우 헬스케어 사업에 실질적 영향이 큰 1~2건만 골라 담을 것. 각 sub_bullet은 객체 {text, note}: text는 위 규칙 그대로, note는 **이 sub_bullet의 text에 실제로 등장하는** 전문용어·낯선 약어·생소한 기업명 또는 발생 날짜에 대한 한 줄 설명("용어: 설명" 형식, bullet의 note와 같은 규칙, 해당 없으면 빈 문자열""). **서로 다른 사건에 각각 다른 날짜/용어를 달아야 하면, 한 sub_bullet에 몰아넣지 말고 사건별로 sub_bullet을 나눠서 각자의 note에 달 것** -- 예: "A지진(날짜1)과 B호우(날짜2)로 손해 증가"처럼 한 문장에 두 사건을 합치면 note를 하나만 달 수 있어 한쪽 날짜를 잃음; "A지진으로 손해 증가"(note: "날짜1 발생")와 "B호우로 추가 손해"(note: "날짜2 발생")처럼 sub_bullet 두 개로 나눌 것
+  - notes: 이 bullet의 text에 실제로 등장하는 전문용어·낯선 약어(화이트리스트 외 기관 약칭 포함) 또는 생소한 기업·법인명에 대한 한 줄 설명들의 배열, 각 원소는 "용어: 설명" 형식. **이 bullet의 text에 나오지 않는 용어는 절대 설명하지 말 것** (본문에는 있었지만 압축 과정에서 text에 안 들어간 용어라면 그 용어의 note도 넣지 말 것). **text 한 줄에 낯선 용어가 두 개 이상이면 각각 별도 원소로** (예: "BXPE 또는 Tactical Opportunities"처럼 서로 다른 두 용어가 한 줄에 있으면 notes에 "BXPE: ...", "Tactical Opportunities: ..." 두 원소를 담음). 화이트리스트 약칭이나 이미 널리 알려진 용어/기업명도 설명하지 말고, 해당 없으면 빈 배열([]). 예: 화이트리스트에 있는 "심평원"을 notes에 "심평원: 건강보험심사평가원"처럼 담는 것은 잘못된 예 -- 화이트리스트 약칭(심평원/건보공단/식약처/복지부/질병청)은 notes에 넣지 말 것
+  - sub_bullets: text를 뒷받침하는 근거·수치·사례, 보통 최대 2개 (상한선, 필요한 만큼만) -- **단, 하나의 발표/출시에 서로 다른 개별 구성요소(하위 서비스, 세부 상품 등)가 여러 개 묶여 있고 그 각각을 나열하는 것 자체가 핵심 정보인 경우(예: 하나의 통합 솔루션이 5개의 개별 서비스로 구성)엔 예외적으로 5개까지 나열 가능**. 그 외 일반적인 경우는 여전히 2개 이내로 압축. 같은 문체 규칙 적용 (없으면 빈 배열 []). **서로 다른 사실을 담을 것** -- 같은 판단을 다른 평가지표·다른 표현으로 나열하지 말고, 내용이 겹치면 하나로 합칠 것. **이 예외는 상품/서비스 "출시·발표" 기사에만 적용** -- 국회·정부의 법률안·안건 의결처럼 여러 항목을 단순 열거하는 기사(예: "보건복지위, 법률안 88건 의결")는 예외 대상이 아님, 2개 이내로 가장 중요한 항목만 압축할 것. 잘못된 예: 의결된 법률안이 여러 건이라고 해서 각 법률안을 sub_bullets에 3개 이상 나열 -- 이 경우 헬스케어 사업에 실질적 영향이 큰 1~2건만 골라 담을 것. 각 sub_bullet은 객체 {text, notes}: text는 위 규칙 그대로, notes는 **이 sub_bullet의 text에 실제로 등장하는** 전문용어·낯선 약어·생소한 기업명 또는 발생 날짜에 대한 한 줄 설명들의 배열("용어: 설명" 형식, bullet의 notes와 같은 규칙, 해당 없으면 빈 배열[]). **서로 다른 사건이면, 한 sub_bullet에 몰아넣지 말고 사건별로 sub_bullet을 나눌 것** -- 예: "A지진(날짜1)과 B호우(날짜2)로 손해 증가"처럼 서로 다른 두 사건을 한 문장에 합치지 말고, "A지진으로 손해 증가"(notes: ["날짜1 발생"])와 "B호우로 추가 손해"(notes: ["날짜2 발생"])처럼 sub_bullet 두 개로 나눌 것. 단, **하나의 사건/사실을 설명하는 한 줄 안에 낯선 용어가 여러 개** 있는 경우는 sub_bullet을 나누지 말고 notes 배열에 각각 담을 것 (예: "힌남노·12·29 여객기 참사에서 15세 미만 희생자가..."처럼 한 사실 안에 두 사건명이 함께 언급되는 경우 notes에 "힌남노: ...", "12·29 여객기 참사: ..." 두 원소).
 - background: 기사에 등장하는 기업·기관의 배경 정보(과거 인증·승인 이력, 관련 사업 영역 등) 중 본문에 직접 나온 것이 있으면 한 줄로. 날짜가 있으면 괄호로 병기 (예: "'25.3월"). **bullets/sub_bullets에 이미 나온 사실을 반복하지 말 것** -- 거기 없는 추가 맥락일 때만 의미가 있음. 없으면 없는 대로 두는 게 기본값 -- 이해에 꼭 필요한 경우에만 채우고, 그렇지 않으면 빈 문자열("")
   예: sub_bullets에 이미 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"이 있는데 background에 똑같이 "국내 최초 국제건강성과측정기구 인증 획득('25.4월)"을 또 쓰는 것은 잘못된 예 -- 이 경우 background는 빈 문자열("")이어야 함
 - is_reference: 핵심 뉴스가 아니라 참고용 부가 정보이면 true. 예: 화제성/커뮤니티·SNS 반응 기사, 유명인 언급, 직접적인 제도·가격·사업 영향은 없고 배경 정보 성격인 경우. 제도 변화·가격 결정·신제품 출시·규제 조치처럼 실질적 영향이 있으면 false
@@ -293,12 +304,14 @@ ${fullText.slice(0, 6000)}
  *  added background knowledge relevant to the article's topic without surfacing the term itself
  *  into any bullet or the headline. The prompt rule already said not to do this; prompt rules
  *  alone are a probabilistic improvement at best (see the style guide's §2.3/§2.9 history), so
- *  this drops the note deterministically instead of just asking nicely. */
-function dropOrphanedNote(note: string | null, text: string): string | null {
-  if (!note) return null;
-  const term = note.split(':')[0]?.trim();
-  if (!term) return note;
-  return text.includes(term) ? note : null;
+ *  this drops the note deterministically instead of just asking nicely. Notes are arrays
+ *  (2026-09-23, a line can name more than one unfamiliar term) -- filters out just the orphaned
+ *  entries rather than nulling the whole field. */
+function dropOrphanedNotes(notes: string[], text: string): string[] {
+  return notes.filter((note) => {
+    const term = note.split(':')[0]?.trim();
+    return !term || text.includes(term);
+  });
 }
 
 /** deep, fact-dense analysis of a single article's full text for the Market Intelligence
@@ -309,9 +322,9 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   const parsed = (await callGemini(buildDeepPrompt(title, fullText), DEEP_RESPONSE_SCHEMA)) as {
     category: DeepAnalysisResult['category'];
     headline: string;
-    headline_note: string;
+    headline_notes: string[];
     headline_source: string;
-    bullets: { text: string; note: string; sub_bullets: { text: string; note: string }[] }[];
+    bullets: { text: string; notes: string[]; sub_bullets: { text: string; notes: string[] }[] }[];
     background: string;
     is_reference: boolean;
     is_relevant: boolean;
@@ -320,16 +333,16 @@ export async function analyzeDeep(title: string, fullText: string): Promise<Deep
   return {
     category: parsed.category,
     headline: parsed.headline,
-    headlineNote: dropOrphanedNote(parsed.headline_note || null, parsed.headline),
+    headlineNotes: dropOrphanedNotes(parsed.headline_notes ?? [], parsed.headline),
     // not orphan-guarded -- this is a source citation, not a "term: definition" pair, so
     // checking whether its text appears literally in the headline would be meaningless
     headlineSource: parsed.headline_source || null,
     bullets: parsed.bullets.map((b) => ({
       text: b.text,
-      note: dropOrphanedNote(b.note || null, b.text),
+      notes: dropOrphanedNotes(b.notes ?? [], b.text),
       subBullets: b.sub_bullets.map((sb) => ({
         text: sb.text,
-        note: dropOrphanedNote(sb.note || null, sb.text),
+        notes: dropOrphanedNotes(sb.notes ?? [], sb.text),
       })),
     })),
     background: parsed.background || null,

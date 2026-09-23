@@ -36,8 +36,8 @@ describe('analyzeCandidatesDeep', () => {
     analyzeDeep.mockResolvedValue({
       category: '국내 산업',
       headline: '요약 헤드라인',
-      headlineNote: null,
-      bullets: [{ text: 't', note: null, subBullets: [] }],
+      headlineNotes: [],
+      bullets: [{ text: 't', notes: [], subBullets: [] }],
       background: null,
       isReference: false,
       isRelevant: true,
@@ -49,8 +49,8 @@ describe('analyzeCandidatesDeep', () => {
       articleId: 5,
       category: '국내 산업',
       headline: '요약 헤드라인',
-      headlineNote: null,
-      bullets: [{ text: 't', note: null, subBullets: [] }],
+      headlineNotes: [],
+      bullets: [{ text: 't', notes: [], subBullets: [] }],
       background: null,
       isReference: false,
       isRelevant: true,
@@ -109,10 +109,10 @@ describe('analyzeCandidatesDeep', () => {
     extractArticleText.mockResolvedValue('본문');
     analyzeDeep
       .mockResolvedValueOnce({
-        category: 'Global', headline: '위고비 시력상실 소송', bullets: [{ text: 'a', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true,
+        category: 'Global', headline: '위고비 시력상실 소송', bullets: [{ text: 'a', notes: [], subBullets: [] }], background: null, isReference: false, isRelevant: true,
       })
       .mockResolvedValueOnce({
-        category: 'Global', headline: '오젬픽·위고비 시력 잃은 환자들 소송', bullets: [{ text: 'a', note: null, subBullets: [] }, { text: 'b', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true,
+        category: 'Global', headline: '오젬픽·위고비 시력 잃은 환자들 소송', bullets: [{ text: 'a', notes: [], subBullets: [] }, { text: 'b', notes: [], subBullets: [] }], background: null, isReference: false, isRelevant: true,
       });
     consolidateSimilarStories.mockResolvedValue([[10, 11]]);
 
@@ -131,8 +131,8 @@ describe('analyzeCandidatesDeep', () => {
     const { analyzeCandidatesDeep } = await import('@/lib/reportAnalysis');
     extractArticleText.mockResolvedValue('본문');
     analyzeDeep
-      .mockResolvedValueOnce({ category: 'Global', headline: 'h1', bullets: [{ text: 'a', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true })
-      .mockResolvedValueOnce({ category: 'Global', headline: 'h2', bullets: [{ text: 'a', note: null, subBullets: [] }, { text: 'b', note: null, subBullets: [] }], background: null, isReference: false, isRelevant: true });
+      .mockResolvedValueOnce({ category: 'Global', headline: 'h1', bullets: [{ text: 'a', notes: [], subBullets: [] }], background: null, isReference: false, isRelevant: true })
+      .mockResolvedValueOnce({ category: 'Global', headline: 'h2', bullets: [{ text: 'a', notes: [], subBullets: [] }, { text: 'b', notes: [], subBullets: [] }], background: null, isReference: false, isRelevant: true });
     consolidateSimilarStories.mockResolvedValue([[20, 21]]);
 
     const { results } = await analyzeCandidatesDeep([

@@ -81,13 +81,13 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: '사노피, 독감백신 전국 공급 개시',
-        headline_note: '',
+        headline_notes: [],
         headline_source: '',
         bullets: [
           {
             text: '9월 8일부터 전국 공급 개시',
-            note: '',
-            sub_bullets: [{ text: '표준용량 대비 항원 4배', note: '' }],
+            notes: [],
+            sub_bullets: [{ text: '표준용량 대비 항원 4배', notes: [] }],
           },
         ],
         background: '',
@@ -101,13 +101,13 @@ describe('analyzeDeep', () => {
     expect(result).toEqual({
       category: '국내 산업',
       headline: '사노피, 독감백신 전국 공급 개시',
-      headlineNote: null,
+      headlineNotes: [],
       headlineSource: null,
       bullets: [
         {
           text: '9월 8일부터 전국 공급 개시',
-          note: null,
-          subBullets: [{ text: '표준용량 대비 항원 4배', note: null }],
+          notes: [],
+          subBullets: [{ text: '표준용량 대비 항원 4배', notes: [] }],
         },
       ],
       background: null,
@@ -122,8 +122,8 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: '카카오페이, 스테이블코인 기반 AI 에이전트 결제 PoC 완료',
-        headline_note: 'PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인',
-        bullets: [{ text: '이용자가 정한 결제 한도 내에서 AI 에이전트가 결제 여부 판단', note: '', sub_bullets: [] }],
+        headline_notes: ['PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인'],
+        bullets: [{ text: '이용자가 정한 결제 한도 내에서 AI 에이전트가 결제 여부 판단', notes: [], sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: true,
@@ -132,7 +132,7 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('카카오페이 PoC 완료', '본문');
 
-    expect(result.headlineNote).toBe('PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인');
+    expect(result.headlineNotes).toEqual(['PoC: 기술실증, 기술이나 아이디어의 구현 가능성을 확인']);
   });
 
   it('carries isRelevant=false through when Gemini judges the article has no business relevance', async () => {
@@ -141,7 +141,7 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: '건보공단, 신규직원 채용',
-        bullets: [{ text: '채용 인원 374명', note: '', sub_bullets: [] }],
+        bullets: [{ text: '채용 인원 374명', notes: [], sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: false,
@@ -159,7 +159,7 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 보험·제도',
         headline: 'h',
-        bullets: [{ text: '건정심 심의 결과 발표', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
+        bullets: [{ text: '건정심 심의 결과 발표', notes: ['건정심: 건강보험정책심의위원회'], sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: true,
@@ -168,7 +168,7 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('제목', '본문');
 
-    expect(result.bullets[0].note).toBe('건정심: 건강보험정책심의위원회');
+    expect(result.bullets[0].notes).toEqual(['건정심: 건강보험정책심의위원회']);
   });
 
   it('drops a headline_note whose term never appears in the headline (orphaned note)', async () => {
@@ -179,8 +179,8 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 산업',
         headline: 'SK바이오팜, 퍼스트바이오 파킨슨병 후보물질 도입·오픈이노베이션 가동',
-        headline_note: 'DMT: 질병의 진행 자체를 늦추는 질병조절치료제',
-        bullets: [{ text: 'LRRK2 및 c-Abl 이중저해 저분자 경구용 화합물 도입', note: '', sub_bullets: [] }],
+        headline_notes: ['DMT: 질병의 진행 자체를 늦추는 질병조절치료제'],
+        bullets: [{ text: 'LRRK2 및 c-Abl 이중저해 저분자 경구용 화합물 도입', notes: [], sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: true,
@@ -189,7 +189,7 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('제목', '본문');
 
-    expect(result.headlineNote).toBeNull();
+    expect(result.headlineNotes).toEqual([]);
   });
 
   it('drops a bullet note whose term never appears in that bullet\'s own text', async () => {
@@ -198,7 +198,7 @@ describe('analyzeDeep', () => {
       JSON.stringify({
         category: '국내 보험·제도',
         headline: 'h',
-        bullets: [{ text: '급여기준 심의 결과 발표', note: '건정심: 건강보험정책심의위원회', sub_bullets: [] }],
+        bullets: [{ text: '급여기준 심의 결과 발표', notes: ['건정심: 건강보험정책심의위원회'], sub_bullets: [] }],
         background: '',
         is_reference: false,
         is_relevant: true,
@@ -207,7 +207,7 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('제목', '본문');
 
-    expect(result.bullets[0].note).toBeNull();
+    expect(result.bullets[0].notes).toEqual([]);
   });
 
   it('drops a sub_bullet note whose term never appears in that sub_bullet\'s own text', async () => {
@@ -219,8 +219,8 @@ describe('analyzeDeep', () => {
         bullets: [
           {
             text: '자연재해 대비 강화',
-            note: '',
-            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', note: '건정심: 건강보험정책심의위원회' }],
+            notes: [],
+            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', notes: ['건정심: 건강보험정책심의위원회'] }],
           },
         ],
         background: '',
@@ -231,7 +231,7 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('제목', '본문');
 
-    expect(result.bullets[0].subBullets[0].note).toBeNull();
+    expect(result.bullets[0].subBullets[0].notes).toEqual([]);
   });
 
   it('keeps a sub_bullet note whose term does appear in that sub_bullet\'s own text', async () => {
@@ -243,8 +243,8 @@ describe('analyzeDeep', () => {
         bullets: [
           {
             text: '자연재해 대비 강화',
-            note: '',
-            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', note: '난카이 트로프: 일본 혼슈 남쪽 해곡' }],
+            notes: [],
+            sub_bullets: [{ text: '난카이 트로프 지진 발생 가능성', notes: ['난카이 트로프: 일본 혼슈 남쪽 해곡'] }],
           },
         ],
         background: '',
@@ -255,7 +255,34 @@ describe('analyzeDeep', () => {
 
     const result = await analyzeDeep('제목', '본문');
 
-    expect(result.bullets[0].subBullets[0].note).toBe('난카이 트로프: 일본 혼슈 남쪽 해곡');
+    expect(result.bullets[0].subBullets[0].notes).toEqual(['난카이 트로프: 일본 혼슈 남쪽 해곡']);
+  });
+
+  it('keeps multiple notes on the same bullet, dropping only the orphaned one (2026-09-23: a line can name more than one term)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify({
+        category: 'Global',
+        headline: 'h',
+        bullets: [
+          {
+            text: 'BXPE 또는 Tactical Opportunities 활용해 자본 공급',
+            notes: ['BXPE: 개인투자자 대상 사모펀드 투자전략', 'Tactical Opportunities: 유연한 대체투자 전략', '유령용어: 본문에 없음'],
+            sub_bullets: [],
+          },
+        ],
+        background: '',
+        is_reference: false,
+        is_relevant: true,
+      }),
+    );
+
+    const result = await analyzeDeep('제목', '본문');
+
+    expect(result.bullets[0].notes).toEqual([
+      'BXPE: 개인투자자 대상 사모펀드 투자전략',
+      'Tactical Opportunities: 유연한 대체투자 전략',
+    ]);
   });
 
   it('passes headline_source through as-is, NOT subject to the orphaned-term guard', async () => {
