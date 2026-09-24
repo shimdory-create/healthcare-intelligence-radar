@@ -42,6 +42,11 @@ create index if not exists idx_articles_title_norm_published on articles (title_
 create index if not exists idx_articles_published_at on articles (published_at desc);
 create index if not exists idx_articles_priority on articles (priority);
 create index if not exists idx_articles_duplicate_of on articles (duplicate_of_id);
+-- supports pruneOldData's daily `delete from articles where collected_at < ...` (db.ts) --
+-- without this, that delete is a full-table seq scan every day, getting slower as the table
+-- grows toward its ~365-day steady state (found in the 2026-09-24 follow-up audit; confirmed
+-- via EXPLAIN ANALYZE on the live table)
+create index if not exists idx_articles_collected_at on articles (collected_at);
 
 -- generic key-value store for small pieces of app state (e.g. the Kakao OAuth refresh token)
 -- that need to persist across serverless invocations, unlike a static env var
