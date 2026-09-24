@@ -15,6 +15,7 @@ function makeRun(overrides: Partial<PipelineRunRow>): PipelineRunRow {
     reportResult: 'dates 2026-09-23, sections 3, deep-analyzed 4/4, excluded-irrelevant 0, skipped {}',
     emailResult: 'sent',
     kakaoResult: 'sent',
+    pruneResult: 'articles 0, pipeline_runs 0',
     hasError: false,
     ...overrides,
   };
@@ -93,6 +94,25 @@ describe('computeSystemHealthIssues', () => {
     ];
     const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
     expect(issues.some((i) => i.message.includes('AI 분석 실패'))).toBe(false);
+  });
+
+  it('flags a warning when data-retention pruning failed on the last 3 collect runs in a row', () => {
+    const runs = [
+      makeRun({ id: 3, pruneResult: 'error: statement timeout', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 2, pruneResult: 'error: statement timeout', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+      makeRun({ id: 1, pruneResult: 'error: statement timeout', startedAt: new Date(NOW.getTime() - 3 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'warning' && i.message.includes('데이터 정리'))).toBe(true);
+  });
+
+  it('does not flag pruning failure from only 2 consecutive failed runs', () => {
+    const runs = [
+      makeRun({ id: 2, pruneResult: 'error: transient', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, pruneResult: 'error: transient', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('데이터 정리'))).toBe(false);
   });
 
   it('flags a warning when 5+ sources have a 3+ consecutive-error streak', () => {

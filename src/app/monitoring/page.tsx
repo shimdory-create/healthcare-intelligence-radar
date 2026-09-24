@@ -171,6 +171,7 @@ export default async function MonitoringPage() {
                   <th className="px-4 py-2 font-medium">리포트</th>
                   <th className="px-4 py-2 font-medium">이메일</th>
                   <th className="px-4 py-2 font-medium">카카오</th>
+                  <th className="px-4 py-2 font-medium">정리</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -197,6 +198,9 @@ export default async function MonitoringPage() {
                     </td>
                     <td className="px-4 py-2">
                       <StageCell value={run.kakaoResult} />
+                    </td>
+                    <td className="px-4 py-2">
+                      <StageCell value={run.pruneResult} />
                     </td>
                   </tr>
                 ))}

@@ -205,6 +205,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // once-daily retention sweep -- keeps this Supabase free-tier project's storage from growing
+  // unbounded forever (see pruneOldData's doc comment). Runs after everything else so a slow
+  // prune never competes with the time-critical report/send work; runs before
+  // recordPipelineRun (below) so its result is persisted and visible on /monitoring and the
+  // dashboard health banner instead of only appearing in this one HTTP response (2026-09-24 --
+  // a silently-failing prune was otherwise invisible for as long as it took the DB to
+  // approach its free-tier storage cap). Failure here must never fail the whole route, same
+  // reasoning as recordPipelineRun below.
+  const prune = await pruneOldData()
+    .then((r) => `articles ${r.articlesDeleted}, pipeline_runs ${r.pipelineRunsDeleted}`)
+    .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
   await recordPipelineRun({
     route: 'collect',
     startedAt: new Date(routeStart),
@@ -214,15 +226,8 @@ export async function GET(req: NextRequest) {
     reportResult: report,
     emailResult: email,
     kakaoResult: kakao,
+    pruneResult: prune,
   }).catch(() => {});
-
-  // once-daily retention sweep -- keeps this Supabase free-tier project's storage from growing
-  // unbounded forever (see pruneOldData's doc comment). Runs after everything else so a slow
-  // prune never competes with the time-critical report/send work; failure here must never fail
-  // the whole route, same reasoning as recordPipelineRun above.
-  const prune = await pruneOldData()
-    .then((r) => `articles ${r.articlesDeleted}, pipeline_runs ${r.pipelineRunsDeleted}`)
-    .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
   return NextResponse.json({ summary, email, kakao, ai, dedupe, report, prune });
 }

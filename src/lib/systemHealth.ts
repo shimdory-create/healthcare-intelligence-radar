@@ -16,6 +16,10 @@ const NO_COLLECT_DAYS = 4;
 const AI_ERROR_STREAK = 2;
 const BROKEN_SOURCE_THRESHOLD = 5;
 const SOURCE_ERROR_STREAK = 3;
+// prune failures degrade slowly (DB storage grows toward the free-tier cap over roughly a
+// year even if pruning never runs again -- see pruneOldData's doc comment), so this uses a
+// longer streak than AI_ERROR_STREAK before surfacing anything -- a warning, not a critical.
+const PRUNE_ERROR_STREAK = 3;
 
 /** derives user-facing health issues from already-fetched pipeline/source data -- pure
  *  function (no DB access) so it's directly testable and reusable between the dashboard's
@@ -64,6 +68,14 @@ export function computeSystemHealthIssues(
       issues.push({
         severity: 'warning',
         message: `최근 ${AI_ERROR_STREAK}회 연속 AI 분석 실패 — Gemini 모델/쿼터 문제일 수 있습니다.`,
+      });
+    }
+
+    const recentPruneErrors = collectRuns.slice(0, PRUNE_ERROR_STREAK).filter((r) => r.pruneResult?.startsWith('error'));
+    if (recentPruneErrors.length >= PRUNE_ERROR_STREAK) {
+      issues.push({
+        severity: 'warning',
+        message: `최근 ${PRUNE_ERROR_STREAK}회 연속 데이터 정리(prune) 실패 — 저장공간이 서서히 찰 수 있습니다.`,
       });
     }
   }

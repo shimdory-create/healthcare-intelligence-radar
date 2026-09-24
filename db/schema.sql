@@ -97,6 +97,11 @@ create table if not exists pipeline_runs (
 
 create index if not exists idx_pipeline_runs_started_at on pipeline_runs (started_at desc);
 
+-- null for an 'enrich' run -- only 'collect' runs the once-daily retention sweep. Added
+-- 2026-09-24 so a broken pruneOldData (db.ts) is visible on /monitoring and to the dashboard
+-- health banner instead of only appearing in that one cron invocation's HTTP response.
+alter table pipeline_runs add column if not exists prune_result text;
+
 -- optional AI enrichment (Gemini free tier). Every collected article is analyzed (or
 -- re-analyzed only if its content_hash changed since last time, so an unchanged article
 -- never re-spends quota); its priority band here is copied onto articles.priority,

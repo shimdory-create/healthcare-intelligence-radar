@@ -682,6 +682,8 @@ export interface PipelineRunRecord {
   reportResult?: string | null;
   emailResult?: string | null;
   kakaoResult?: string | null;
+  /** null for an 'enrich' run -- only 'collect' runs the once-daily retention sweep */
+  pruneResult?: string | null;
 }
 
 function looksLikeError(s: string | null | undefined): boolean {
@@ -693,13 +695,15 @@ function looksLikeError(s: string | null | undefined): boolean {
  *  succeeding, not just collection. Failing to record a run must never break the route's real
  *  response, so callers wrap this in .catch(() => {}). */
 export async function recordPipelineRun(r: PipelineRunRecord): Promise<void> {
-  const hasError = [r.aiResult, r.dedupeResult, r.reportResult, r.emailResult, r.kakaoResult].some(looksLikeError);
+  const hasError = [r.aiResult, r.dedupeResult, r.reportResult, r.emailResult, r.kakaoResult, r.pruneResult].some(
+    looksLikeError,
+  );
   await sql`
     insert into pipeline_runs
-      (route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, has_error)
+      (route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, prune_result, has_error)
     values
       (${r.route}, ${r.startedAt}, ${r.finishedAt}, ${r.aiResult ?? null}, ${r.dedupeResult ?? null},
-       ${r.reportResult ?? null}, ${r.emailResult ?? null}, ${r.kakaoResult ?? null}, ${hasError})
+       ${r.reportResult ?? null}, ${r.emailResult ?? null}, ${r.kakaoResult ?? null}, ${r.pruneResult ?? null}, ${hasError})
   `;
 }
 
@@ -713,12 +717,13 @@ export interface PipelineRunRow {
   reportResult: string | null;
   emailResult: string | null;
   kakaoResult: string | null;
+  pruneResult: string | null;
   hasError: boolean;
 }
 
 export async function getRecentPipelineRuns(limit = 20): Promise<PipelineRunRow[]> {
   const rows = await sql`
-    select id, route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, has_error
+    select id, route, started_at, finished_at, ai_result, dedupe_result, report_result, email_result, kakao_result, prune_result, has_error
     from pipeline_runs
     order by started_at desc
     limit ${limit}
@@ -734,6 +739,7 @@ export async function getRecentPipelineRuns(limit = 20): Promise<PipelineRunRow[
       report_result: string | null;
       email_result: string | null;
       kakao_result: string | null;
+      prune_result: string | null;
       has_error: boolean;
     }[]
   ).map((r) => ({
@@ -745,6 +751,7 @@ export async function getRecentPipelineRuns(limit = 20): Promise<PipelineRunRow[
     dedupeResult: r.dedupe_result,
     reportResult: r.report_result,
     emailResult: r.email_result,
+    pruneResult: r.prune_result,
     kakaoResult: r.kakao_result,
     hasError: r.has_error,
   }));
