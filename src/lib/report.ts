@@ -146,10 +146,17 @@ export function buildReportSections(
       ? `${candidate.outletCount}개 매체 보도 (${candidate.outletSourceIds.map(sourceDisplayName).join(', ')})`
       : null;
     // names the merged-in outlets the same way outletNote does, instead of a bare count --
-    // user request 2026-09-23 ("다수매체 보도처럼 어디 어디 언급되었는지도 적어줘")
+    // user request 2026-09-23 ("다수매체 보도처럼 어디 어디 언급되었는지도 적어줘"). The
+    // displayed number is the outlet list's own length, NOT deep.consolidatedCount (found
+    // live 2026-09-28: consolidatedCount is the number of MERGED CANDIDATE ROWS, but each
+    // row can itself already be a multi-outlet duplicate survivor -- e.g. 2 candidates
+    // merging can legitimately carry 7 distinct outlets between them, so "관련 보도 2건
+    // 통합 (매체1, ..., 매체7)" read as internally inconsistent even though both numbers
+    // were individually correct for what they measured).
+    const consolidatedOutlets = deep.consolidatedOutletSourceIds ?? [];
     const consolidatedNote =
       deep.consolidatedCount && deep.consolidatedCount > 1
-        ? `관련 보도 ${deep.consolidatedCount}건 통합 (${(deep.consolidatedOutletSourceIds ?? []).map(sourceDisplayName).join(', ')})`
+        ? `관련 보도 ${consolidatedOutlets.length}개 매체 통합 (${consolidatedOutlets.map(sourceDisplayName).join(', ')})`
         : null;
 
     const sectionName: SectionName = candidate.isMultiOutlet ? '다수매체 보도' : deep.category;

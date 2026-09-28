@@ -301,7 +301,7 @@ describe('buildReportSections', () => {
     expect(sections[0].items[0].outletNote).toBeNull();
   });
 
-  it('renders a "관련 보도 N건 통합" note naming the merged outlets when consolidatedCount is set', () => {
+  it('renders a "관련 보도 N개 매체 통합" note naming the merged outlets when consolidatedCount is set', () => {
     const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
     const deep = new Map<number, CandidateDeepResult>([
       [
@@ -316,7 +316,32 @@ describe('buildReportSections', () => {
 
     const sections = buildReportSections(candidates, deep);
 
-    expect(sections[0].items[0].consolidatedNote).toBe('관련 보도 3건 통합 (연합뉴스, 조선일보, 동아일보)');
+    expect(sections[0].items[0].consolidatedNote).toBe('관련 보도 3개 매체 통합 (연합뉴스, 조선일보, 동아일보)');
+  });
+
+  it('sizes the consolidated note by the outlet list, not the merged-row count, when they diverge (found live 2026-09-28)', () => {
+    // 2 report candidates merged (consolidatedCount: 2), but each candidate was itself
+    // already a multi-outlet duplicate survivor, so the union of outlets is 7 -- the note
+    // must say "7개 매체" to match the 7 outlets actually listed, not "2건" from the
+    // merged-row count, which would contradict the parenthetical list right next to it.
+    const candidates = [makeCandidate({ id: 1, isMultiOutlet: false })];
+    const deep = new Map<number, CandidateDeepResult>([
+      [
+        1,
+        {
+          articleId: 1, category: '국내 산업', headline: 'h', headlineNotes: [], headlineSource: null,
+          bullets: [], background: null, isReference: false, isRelevant: true,
+          consolidatedCount: 2,
+          consolidatedOutletSourceIds: ['yna', 'chosun', 'donga', 'hani', 'hankyung', 'mk', 'herald'],
+        },
+      ],
+    ]);
+
+    const sections = buildReportSections(candidates, deep);
+
+    expect(sections[0].items[0].consolidatedNote).toBe(
+      '관련 보도 7개 매체 통합 (연합뉴스, 조선일보, 동아일보, 한겨레, 한국경제, 매일경제, 헤럴드경제)',
+    );
   });
 
   it('leaves consolidatedNote null when consolidatedCount is absent or 1', () => {
