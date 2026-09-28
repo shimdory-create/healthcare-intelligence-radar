@@ -19,6 +19,38 @@ export interface GeminiAnalysisItem {
  *  regularly retires free-tier model versions on a matter of months */
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
+// Free-tier RPM (requests/minute) ceiling for flash-lite class models is 15, confirmed live via
+// AI Studio's rate-limit dashboard (2026-09-28) after a multi-hour run of Gemini 503 "high
+// demand" errors -- turned out to be this project's OWN usage exceeding 15 RPM (peaked at 18),
+// not a broader Gemini-side outage as first assumed; RPD/TPM had plenty of headroom the whole
+// time. Every callGemini invocation now waits at least this long since the previous one,
+// regardless of which caller (analyzeArticles' batch loop, analyzeCandidatesDeep's per-candidate
+// loop, or consolidateSimilarStories) is making it -- a single module-level gate is the only way
+// to bound the combined rate across all three, since a single route invocation can call all of
+// them. 4500ms -> ~13.3 req/min, a safety margin under the 15 RPM line rather than grazing it
+// exactly. Doesn't fully protect against two DIFFERENT concurrent route invocations sharing the
+// same free-tier quota (each has its own in-memory timer, Vercel doesn't share state across
+// invocations) -- but GitHub Actions' concurrency guard on intraday-collect.yml already prevents
+// that for 'enrich', and 'collect' only ever runs once daily via Vercel's own cron.
+const MIN_GEMINI_CALL_INTERVAL_MS = 4500;
+let lastGeminiCallAt = 0;
+
+/** resets the rate limiter's internal clock -- exported ONLY for test isolation (module state
+ *  otherwise persists across every `it()` in the same test file, which would either make later
+ *  tests wait for real or make an intentional throttle test flaky depending on prior tests'
+ *  timing). Never called from production code. */
+export function __resetGeminiRateLimiterForTests(): void {
+  lastGeminiCallAt = 0;
+}
+
+async function waitForGeminiRateLimit(): Promise<void> {
+  const elapsed = Date.now() - lastGeminiCallAt;
+  if (elapsed < MIN_GEMINI_CALL_INTERVAL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, MIN_GEMINI_CALL_INTERVAL_MS - elapsed));
+  }
+  lastGeminiCallAt = Date.now();
+}
+
 const RESPONSE_SCHEMA = {
   type: 'array',
   items: {
@@ -83,6 +115,8 @@ async function callGemini(prompt: string, schema: object): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
   const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+
+  await waitForGeminiRateLimit();
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,

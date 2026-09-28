@@ -1,7 +1,14 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { analyzeArticles, analyzeDeep, contentHash } from '@/lib/gemini';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { analyzeArticles, analyzeDeep, contentHash, __resetGeminiRateLimiterForTests } from '@/lib/gemini';
 
 const ORIGINAL_ENV = { ...process.env };
+
+// every test starts with a clean rate-limiter clock -- otherwise a test's timing would depend
+// on how much real wall-clock time happened to elapse since whichever test ran before it in
+// the same file (module state persists across `it()` blocks), which would be flaky
+beforeEach(() => {
+  __resetGeminiRateLimiterForTests();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -309,5 +316,47 @@ describe('analyzeDeep', () => {
   it('throws when GEMINI_API_KEY is not set, same as analyzeArticles', async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(analyzeDeep('제목', '본문')).rejects.toThrow('GEMINI_API_KEY');
+  });
+});
+
+describe('Gemini call rate limiting', () => {
+  it('does not delay the first call after a reset (cold start)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify([{ article_id: 1, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
+    );
+
+    const start = Date.now();
+    await analyzeArticles([{ id: 1, title: 't', snippet: 's' }]);
+    // a real assertion, not a fake-timers one -- proves normal (non-back-to-back) usage never
+    // pays the throttle cost, only calls that land within MIN_GEMINI_CALL_INTERVAL_MS of the
+    // previous one do
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+
+  it('delays a second call that lands within 4.5s of the first, to stay under the 15 RPM free-tier ceiling (found live 2026-09-28: this project\'s own usage peaked at 18 RPM)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGeminiResponse(
+      JSON.stringify([{ article_id: 1, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
+    );
+
+    vi.useFakeTimers();
+    try {
+      await analyzeArticles([{ id: 1, title: 't', snippet: 's' }]);
+
+      let secondResolved = false;
+      const second = analyzeArticles([{ id: 2, title: 't2', snippet: 's2' }]).then(() => {
+        secondResolved = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(secondResolved).toBe(false); // only 1s of the required 4.5s gap has passed
+
+      await vi.advanceTimersByTimeAsync(4000); // now 5s total since the first call
+      await second;
+      expect(secondResolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
