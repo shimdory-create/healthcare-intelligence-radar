@@ -1,0 +1,34 @@
+name: Keepalive
+
+# GitHub silently disables scheduled workflows in a PUBLIC repo (this one is public -- see
+# project memory) after 60 days with no new commits -- only commits count as "activity";
+# workflow runs themselves do NOT reset that clock (found live 2026-09-28, sustainability
+# audit). If nobody touches this repo for 60+ days, intraday-collect.yml would stop firing
+# with no notification -- silent, not an error anywhere the health banner could see.
+#
+# This workflow makes a trivial commit monthly, well inside the 60-day window, so the
+# inactivity clock never gets close to expiring -- self-sustaining with zero human upkeep.
+# Monthly (not right at the 59-day edge) leaves large slack for GitHub Actions scheduling
+# delays or a missed run.
+on:
+  schedule:
+    - cron: '0 0 1 * *' # 00:00 UTC on the 1st of every month
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Touch keepalive marker and commit if changed
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/.keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/.keepalive
+          git diff --staged --quiet || git commit -m "chore: keepalive (prevent 60-day scheduled-workflow auto-disable)"
+          git push

@@ -28,6 +28,19 @@ on:
     - cron: '0 1,3,5,7,9,11,13,15,17,19,21 * * *'
   workflow_dispatch: {}
 
+# Prevents two invocations of this workflow from ever running at the same time -- found live
+# 2026-09-28 (sustainability audit): pipeline_runs showed 6 pairs of 'enrich' runs starting
+# 33-113s apart on 2026-09-18 (from manual workflow_dispatch testing that day, not a scheduling
+# bug, but nothing would have stopped it if it HAD been). Without this, two overlapping runs
+# would each call collectAll() + enrichArticles() independently -- duplicate Gemini API calls
+# against the same free-tier daily quota for articles that were about to be collected by the
+# other run anyway. cancel-in-progress:false queues the new run instead of killing an
+# in-progress one -- each run finishes in under 3 minutes (well inside the 2h gap between
+# scheduled runs), so queuing costs nothing and never throws away completed work.
+concurrency:
+  group: intraday-collect
+  cancel-in-progress: false
+
 jobs:
   trigger:
     runs-on: ubuntu-latest
