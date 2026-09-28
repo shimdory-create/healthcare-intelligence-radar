@@ -96,6 +96,33 @@ describe('computeSystemHealthIssues', () => {
     expect(issues.some((i) => i.message.includes('AI 분석 실패'))).toBe(false);
   });
 
+  it('flags a warning when every batch failed on the last 2 runs (found live 2026-09-28: a Gemini 503 outage never produces an "error"-prefixed aiResult)', () => {
+    const runs = [
+      makeRun({ id: 2, route: 'enrich', aiResult: 'analyzed 0, cached 15, failed-batches 3', startedAt: new Date(NOW.getTime() - 3_600_000) }),
+      makeRun({ id: 1, route: 'enrich', aiResult: 'analyzed 0, cached 94, failed-batches 9', startedAt: new Date(NOW.getTime() - 7_200_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'warning' && i.message.includes('AI 분석이 전부 실패'))).toBe(true);
+  });
+
+  it('does not flag a total-AI-failure warning from a single isolated run', () => {
+    const runs = [
+      makeRun({ id: 2, route: 'enrich', aiResult: 'analyzed 0, cached 15, failed-batches 3', startedAt: new Date(NOW.getTime() - 3_600_000) }),
+      makeRun({ id: 1, route: 'enrich', aiResult: 'analyzed 33, cached 15', startedAt: new Date(NOW.getTime() - 7_200_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('AI 분석이 전부 실패'))).toBe(false);
+  });
+
+  it('does not flag "analyzed 0" runs that have no failed batches (everything was just a cache hit, not a failure)', () => {
+    const runs = [
+      makeRun({ id: 2, route: 'enrich', aiResult: 'analyzed 0, cached 15', startedAt: new Date(NOW.getTime() - 3_600_000) }),
+      makeRun({ id: 1, route: 'enrich', aiResult: 'analyzed 0, cached 94', startedAt: new Date(NOW.getTime() - 7_200_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('AI 분석이 전부 실패'))).toBe(false);
+  });
+
   it('flags a warning when data-retention pruning failed on the last 3 collect runs in a row', () => {
     const runs = [
       makeRun({ id: 3, pruneResult: 'error: statement timeout', startedAt: new Date(NOW.getTime() - 86_400_000) }),

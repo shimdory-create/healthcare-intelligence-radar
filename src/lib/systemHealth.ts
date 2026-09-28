@@ -30,6 +30,24 @@ const PRUNE_ERROR_STREAK = 3;
 // deliverable, and this means it's been empty, not just degraded.
 const EMPTY_REPORT_STREAK = 2;
 const REPORT_SECTIONS_PATTERN = /^dates .*sections (\d+)/;
+// A Gemini call that fails is caught INSIDE enrichArticles per batch (aiEnrichment.ts's
+// `catch { failedBatches++; continue; }`), so a total outage never produces an aiResult
+// starting with "error" -- it returns a normal-looking "analyzed 0, cached N, failed-batches
+// M" string instead, which AI_ERROR_STREAK's startsWith('error') check can't see at all.
+// Found live 2026-09-28: a Gemini 503 ("model currently experiencing high demand") failed
+// every single batch on a real run, and the existing check missed it entirely. Also checks
+// ALL routes, not just 'collect' -- 'enrich' runs 12x/day and is where most AI calls happen,
+// but the AI_ERROR_STREAK check above only ever looks at the once-daily 'collect' route.
+const AI_TOTAL_FAILURE_STREAK = 2;
+const AI_RESULT_PATTERN = /^analyzed (\d+), cached \d+(?:, failed-batches (\d+))?/;
+
+function isTotalAiFailure(aiResult: string | null | undefined): boolean {
+  const m = aiResult?.match(AI_RESULT_PATTERN);
+  if (!m) return false;
+  const analyzed = Number(m[1]);
+  const failedBatches = m[2] ? Number(m[2]) : 0;
+  return analyzed === 0 && failedBatches > 0;
+}
 
 /** derives user-facing health issues from already-fetched pipeline/source data -- pure
  *  function (no DB access) so it's directly testable and reusable between the dashboard's
@@ -55,6 +73,14 @@ export function computeSystemHealthIssues(
     issues.push({
       severity: 'critical',
       message: `마지막 파이프라인 실행이 ${Math.round(hoursSinceLastRun)}시간 전입니다 — 스케줄러가 멈췄을 수 있습니다.`,
+    });
+  }
+
+  const recentTotalAiFailures = runs.slice(0, AI_TOTAL_FAILURE_STREAK).filter((r) => isTotalAiFailure(r.aiResult));
+  if (recentTotalAiFailures.length >= AI_TOTAL_FAILURE_STREAK) {
+    issues.push({
+      severity: 'warning',
+      message: `최근 ${AI_TOTAL_FAILURE_STREAK}회 연속 AI 분석이 전부 실패했습니다 (Gemini 서비스 과부하/장애 가능성) — 당분간 규칙 기반 우선순위로만 동작합니다.`,
     });
   }
 
