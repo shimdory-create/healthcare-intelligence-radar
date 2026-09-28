@@ -51,11 +51,25 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const [modelsList, primaryModel, altModel] = await Promise.all([
+  // first attempt's altModel choice (gemini-2.5-flash) turned out to be deprecated for new
+  // users (404, not informative) -- retrying with models confirmed current in that same
+  // models.list response: a newer flash-lite generation, a "latest" alias, and the primary
+  // model's own direct successor line, to see if this is specific to gemini-3.5-flash-lite or
+  // affects the lite tier broadly right now.
+  const [modelsList, primaryModel, flashLite31, flashLiteLatest, flash35] = await Promise.all([
     tryModelsList(),
     tryModel(process.env.GEMINI_MODEL ?? 'gemini-3.5-flash-lite'),
-    tryModel('gemini-2.5-flash'),
+    tryModel('gemini-3.1-flash-lite'),
+    tryModel('gemini-flash-lite-latest'),
+    tryModel('gemini-3.5-flash'),
   ]);
 
-  return NextResponse.json({ modelsList, primaryModel, altModel, checkedAt: new Date().toISOString() });
+  return NextResponse.json({
+    modelsList,
+    primaryModel,
+    flashLite31,
+    flashLiteLatest,
+    flash35,
+    checkedAt: new Date().toISOString(),
+  });
 }
