@@ -334,7 +334,7 @@ describe('Gemini call rate limiting', () => {
     expect(Date.now() - start).toBeLessThan(500);
   });
 
-  it('delays a second call that lands within 4.5s of the first, to stay under the 15 RPM free-tier ceiling (found live 2026-09-28: this project\'s own usage peaked at 18 RPM)', async () => {
+  it('delays a second call that lands within 6.7s of the first, to stay within healthcare-radar\'s agreed 9 RPM share of the 15 RPM free-tier ceiling (2026-09-28: shared with cafe-recommender until its own project separation ships)', async () => {
     process.env.GEMINI_API_KEY = 'test-key';
     mockGeminiResponse(
       JSON.stringify([{ article_id: 1, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
@@ -349,10 +349,10 @@ describe('Gemini call rate limiting', () => {
         secondResolved = true;
       });
 
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(secondResolved).toBe(false); // only 1s of the required 4.5s gap has passed
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(secondResolved).toBe(false); // only 2s of the required 6.7s gap has passed
 
-      await vi.advanceTimersByTimeAsync(4000); // now 5s total since the first call
+      await vi.advanceTimersByTimeAsync(5000); // now 7s total since the first call
       await second;
       expect(secondResolved).toBe(true);
     } finally {

@@ -21,18 +21,27 @@ const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
 // Free-tier RPM (requests/minute) ceiling for flash-lite class models is 15, confirmed live via
 // AI Studio's rate-limit dashboard (2026-09-28) after a multi-hour run of Gemini 503 "high
-// demand" errors -- turned out to be this project's OWN usage exceeding 15 RPM (peaked at 18),
-// not a broader Gemini-side outage as first assumed; RPD/TPM had plenty of headroom the whole
-// time. Every callGemini invocation now waits at least this long since the previous one,
+// demand" errors. Every callGemini invocation waits at least this long since the previous one,
 // regardless of which caller (analyzeArticles' batch loop, analyzeCandidatesDeep's per-candidate
 // loop, or consolidateSimilarStories) is making it -- a single module-level gate is the only way
 // to bound the combined rate across all three, since a single route invocation can call all of
-// them. 4500ms -> ~13.3 req/min, a safety margin under the 15 RPM line rather than grazing it
-// exactly. Doesn't fully protect against two DIFFERENT concurrent route invocations sharing the
-// same free-tier quota (each has its own in-memory timer, Vercel doesn't share state across
-// invocations) -- but GitHub Actions' concurrency guard on intraday-collect.yml already prevents
-// that for 'enrich', and 'collect' only ever runs once daily via Vercel's own cron.
-const MIN_GEMINI_CALL_INTERVAL_MS = 4500;
+// them. Doesn't fully protect against two DIFFERENT concurrent route invocations (each has its
+// own in-memory timer, Vercel doesn't share state across invocations) -- but GitHub Actions'
+// concurrency guard on intraday-collect.yml already prevents that for 'enrich', and 'collect'
+// only ever runs once daily via Vercel's own cron.
+//
+// 6700ms -> ~9 req/min, NOT simply "a safety margin under 15" -- this project's Gemini traffic
+// currently shares its Google Cloud project's quota with an unrelated project on the same
+// machine ("cafe-recommender" / "빵지순례") that was assumed separated on 2026-09-28 but
+// turned out not to be (their code needs a real service-account/OAuth rework to actually move
+// to a different project, not just a new API key string -- a bigger lift, not done yet). Until
+// that lands, the two projects have agreed to split the shared 15 RPM ceiling: healthcare-radar
+// takes 9, cafe-recommender takes 6 (their own limiter, not this file). This number is a
+// negotiated interim split, not purely a technical margin -- once cafe-recommender's real
+// separation ships, this can safely go back up toward 13-14 RPM (~4500ms), since this project's
+// own usage alone was never close to 15 RPM (peaked at 18 only due to the two projects'
+// combined/overlapping traffic).
+const MIN_GEMINI_CALL_INTERVAL_MS = 6700;
 let lastGeminiCallAt = 0;
 
 /** resets the rate limiter's internal clock -- exported ONLY for test isolation (module state
