@@ -93,10 +93,17 @@ export function buildReportEmailHtml(sections: ReportSection[], dateLabel: strin
           const bulletsHtml = item.bullets
             .map((b) => {
               const bulletNotesHtml = notesHtml(b.notes, 36);
+              // labeled-index resets per bullet, same reasoning as buildReportDocx's loop --
+              // see LABELED_SUB_BULLET_PATTERN's doc comment for why "(주체명)" sub_bullets
+              // render one level deeper (①②③...) than plain ones (·)
+              let labeledIndex = 0;
               const subHtml = b.subBullets
                 .map((s) => {
-                  const subNotesHtml = notesHtml(s.notes, 52);
-                  return `<p style="margin:2px 0 0 40px;font-size:12px;">·${escapeHtml(s.text)}</p>${subNotesHtml}`;
+                  const isLabeled = LABELED_SUB_BULLET_PATTERN.test(s.text);
+                  const marker = isLabeled ? `${CIRCLED_NUMBERS[labeledIndex] ?? `(${labeledIndex + 1})`} ` : '·';
+                  if (isLabeled) labeledIndex++;
+                  const subNotesHtml = notesHtml(s.notes, isLabeled ? 68 : 52);
+                  return `<p style="margin:2px 0 0 ${isLabeled ? 56 : 40}px;font-size:12px;">${marker}${escapeHtml(s.text)}</p>${subNotesHtml}`;
                 })
                 .join('');
               return `<p style="margin:2px 0 0 28px;font-size:12px;">- ${escapeHtml(b.text)}</p>${bulletNotesHtml}${subHtml}`;
@@ -213,6 +220,17 @@ const BACKGROUND_SIZE = 24;
 // fixed, only reduces how often one happens.
 const CHAR_SPACING = -10;
 
+// a sub_bullet whose text starts with a short "(주체명)" label -- e.g. "(손보) 암·뇌·심장 등
+// 질병 치료비 보장" -- is one level deeper than a plain sub_bullet (gemini.ts's buildDeepPrompt
+// instructs this format for the "복합 발표" 5-item exception, when the listed components are
+// each tied to a distinct entity/division). Rendered with ①②③... instead of "·" so the reader
+// sees it's a level below the sub_bullet introducing the group, not a sibling of it (found live
+// 2026-09-28: 기획실 benchmark doc used this pattern, plain "·" for both levels read as same-level
+// and was confusing). Purely a rendering distinction -- ReportBullet.subBullets stays a flat
+// {text, notes}[] array, no schema change.
+const LABELED_SUB_BULLET_PATTERN = /^\([^)]{1,20}\)/;
+const CIRCLED_NUMBERS = ['①', '②', '③', '④', '⑤'];
+
 function titlePara(text: string): Paragraph {
   return new Paragraph({
     alignment: AlignmentType.CENTER,
@@ -274,6 +292,34 @@ function subNotePara(text: string): Paragraph {
     ],
     spacing: { after: 60, ...SINGLE_LINE_SPACING },
     indent: { left: 1060, hanging: 180 },
+  });
+}
+
+/** the "(주체명) 설명" sub_bullet variant -- see LABELED_SUB_BULLET_PATTERN's doc comment.
+ *  `index` is 0-based and counted per-bullet (reset for each parent bullet's subBullets list,
+ *  not global across the report) -- falls back to a plain "(N)" marker past CIRCLED_NUMBERS'
+ *  length, which the sub_bullets schema's maxItems:5 cap should never actually reach. */
+function labeledSubBulletPara(text: string, index: number): Paragraph {
+  const marker = CIRCLED_NUMBERS[index] ?? `(${index + 1})`;
+  return new Paragraph({
+    children: [
+      new TextRun({ text: `${marker} `, size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
+      new TextRun({ text, size: BODY_SIZE, font: FONT, characterSpacing: CHAR_SPACING }),
+    ],
+    spacing: { after: 40, ...LINE_SPACING },
+    indent: { left: 1140, hanging: 220 },
+  });
+}
+
+/** a labeled sub-bullet's own note, offset from labeledSubBulletPara's indent (left 1140) by
+ *  the same +180 delta subNotePara uses from subBulletPara's indent (880 -> 1060). */
+function labeledSubNotePara(text: string): Paragraph {
+  return new Paragraph({
+    children: [
+      new TextRun({ text: `* ${text}`, size: NOTE_SIZE, font: FONT, color: NOTE_COLOR, characterSpacing: CHAR_SPACING }),
+    ],
+    spacing: { after: 60, ...SINGLE_LINE_SPACING },
+    indent: { left: 1320, hanging: 180 },
   });
 }
 
@@ -340,9 +386,13 @@ export async function buildReportDocx(
       for (const bullet of item.bullets) {
         children.push(bulletPara(bullet.text));
         for (const note of bullet.notes) children.push(notePara(note));
+        // labeled-index resets per bullet -- a "(주체명)" run only ever appears within one
+        // bullet's own subBullets list, never spanning across bullets
+        let labeledIndex = 0;
         for (const sub of bullet.subBullets) {
-          children.push(subBulletPara(sub.text));
-          for (const note of sub.notes) children.push(subNotePara(note));
+          const isLabeled = LABELED_SUB_BULLET_PATTERN.test(sub.text);
+          children.push(isLabeled ? labeledSubBulletPara(sub.text, labeledIndex++) : subBulletPara(sub.text));
+          for (const note of sub.notes) children.push(isLabeled ? labeledSubNotePara(note) : subNotePara(note));
         }
       }
       if (item.background) children.push(backgroundPara(item.background));

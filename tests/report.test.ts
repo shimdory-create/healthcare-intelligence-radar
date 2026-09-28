@@ -542,6 +542,42 @@ describe('buildReportEmailHtml', () => {
 
     expect(html).not.toContain('※');
   });
+
+  it('renders "(주체명)" sub_bullets with ①②③, resetting per bullet, while plain ones keep "·" (2026-09-28)', () => {
+    const sections: ReportSection[] = [
+      {
+        title: '국내 산업',
+        items: [
+          {
+            headline: 'h', headlineNotes: [], headlineSource: null, outletNote: null, consolidatedNote: null,
+            bullets: [
+              {
+                text: '계열사가 함께 참여해 혜택을 제공',
+                notes: [],
+                subBullets: [
+                  { text: '요약 설명 (라벨 없음)', notes: [] },
+                  { text: '(손보) 질병 치료비 보장과 보험료 할인', notes: [] },
+                  { text: '(캐피탈) 우대금리 제공', notes: [] },
+                ],
+              },
+              { text: '두 번째 사실', notes: [], subBullets: [{ text: '(은행) 러닝카드 출시', notes: [] }] },
+            ],
+            background: null,
+            isReference: false,
+          },
+        ],
+      },
+    ];
+
+    const html = buildReportEmailHtml(sections, "'26.09.14 (월)");
+
+    expect(html).toContain('① (손보) 질병 치료비 보장과 보험료 할인');
+    expect(html).toContain('② (캐피탈) 우대금리 제공');
+    expect(html).toContain('·요약 설명 (라벨 없음)');
+    // second bullet's own labeled sub_bullet restarts at ①, not ③
+    expect(html).toContain('① (은행) 러닝카드 출시');
+    expect(html).not.toContain('③');
+  });
 });
 
 describe('buildReportDocx', () => {
@@ -637,5 +673,59 @@ describe('buildReportDocx', () => {
 
     expect(xml).toContain('* BXPE: 사모펀드 전략');
     expect(xml).toContain('* Tactical Opportunities: 대체투자 전략');
+  });
+
+  it('renders "(주체명)" sub_bullets one level deeper with ①②③, resetting per bullet (2026-09-28)', async () => {
+    const { buildReportDocx } = await import('@/lib/report');
+    const JSZip = (await import('jszip')).default;
+    const sections = [
+      {
+        title: '국내 산업',
+        items: [
+          {
+            headline: '테스트 헤드라인',
+            headlineNotes: [], headlineSource: null,
+            outletNote: null, consolidatedNote: null,
+            bullets: [
+              {
+                text: '계열사가 함께 참여해 혜택을 제공',
+                notes: [],
+                subBullets: [
+                  { text: '요약 설명 (라벨 없음)', notes: [] },
+                  { text: '(손보) 질병 치료비 보장과 보험료 할인', notes: [] },
+                  { text: '(캐피탈) 우대금리 제공', notes: ['0.1%: 항목별 적용'] },
+                ],
+              },
+              {
+                // a second bullet's own labeled run must restart at ① too, not continue at ③
+                text: '두 번째 사실',
+                notes: [],
+                subBullets: [{ text: '(은행) 러닝카드 출시', notes: [] }],
+              },
+            ],
+            background: null,
+            isReference: false,
+          },
+        ],
+      },
+    ];
+
+    const buffer = await buildReportDocx(sections, "'26.09.28 (월)", '헬스케어사업팀');
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file('word/document.xml')!.async('text');
+
+    expect(xml).toContain('①');
+    expect(xml).toContain('(손보) 질병 치료비 보장과 보험료 할인');
+    expect(xml).toContain('②');
+    expect(xml).toContain('(캐피탈) 우대금리 제공');
+    expect(xml).toContain('* 0.1%: 항목별 적용');
+    // the unlabeled sub_bullet keeps the plain "·" marker, not a circled number
+    expect(xml).toMatch(/<w:t[^>]*>·<\/w:t>[\s\S]{0,200}?요약 설명 \(라벨 없음\)/);
+    // the second bullet's own labeled sub_bullet ("(은행)") restarts the counter at ① rather
+    // than continuing the first bullet's count (which would make it ③) -- so ① appears twice
+    // (once per bullet) and ③ never appears at all
+    expect(xml.match(/①/g)?.length).toBe(2);
+    expect(xml).not.toContain('③');
+    expect(xml).toContain('(은행) 러닝카드 출시');
   });
 });
