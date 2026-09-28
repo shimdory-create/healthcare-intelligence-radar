@@ -35,8 +35,9 @@ on:
 # would each call collectAll() + enrichArticles() independently -- duplicate Gemini API calls
 # against the same free-tier daily quota for articles that were about to be collected by the
 # other run anyway. cancel-in-progress:false queues the new run instead of killing an
-# in-progress one -- each run finishes in under 3 minutes (well inside the 2h gap between
-# scheduled runs), so queuing costs nothing and never throws away completed work.
+# in-progress one -- each run finishes well within the 2h gap between scheduled runs (up to
+# ~195s per the route's own budget below, even with the Gemini rate limiter's added latency),
+# so queuing costs nothing and never throws away completed work.
 concurrency:
   group: intraday-collect
   cancel-in-progress: false
@@ -46,7 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call /api/cron/enrich
+        # --max-time was 180 against the route's own 200s maxDuration (only 20s slack) --
+        # raised to 195s (2026-09-28) after adding a 4.5s minimum gap between Gemini calls
+        # (gemini.ts's rate limiter, see that file's doc comment) made individual runs take
+        # noticeably longer -- a real run observed at 142s after the fix, up from well under
+        # that before. The route's own deadline logic still governs when it stops doing new
+        # work; this just gives the external HTTP client enough patience to receive that
+        # response instead of giving up first and showing a false failure in the Actions log.
         run: |
           curl -sf -X GET "https://healthcare-intelligence-radar.vercel.app/api/cron/enrich" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            --max-time 180
+            --max-time 195
