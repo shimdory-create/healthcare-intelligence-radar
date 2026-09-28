@@ -20,6 +20,16 @@ const SOURCE_ERROR_STREAK = 3;
 // year even if pruning never runs again -- see pruneOldData's doc comment), so this uses a
 // longer streak than AI_ERROR_STREAK before surfacing anything -- a warning, not a critical.
 const PRUNE_ERROR_STREAK = 3;
+// a 'collect' run whose reportResult starts with "dates " actually attempted the report (as
+// opposed to "skipped: non-business day"/"no-new-articles-since-last-report"/"skipped: time
+// budget exhausted..."/"error: ..."), so its "sections N" count is a real signal. 2 consecutive
+// such runs landing on 0 sections is the one failure mode none of the other checks above catch:
+// the pipeline runs "successfully" every day (no error anywhere) but silently stops producing
+// any report content -- e.g. a broken is_relevant/category classification, or every candidate
+// failing the relevance gate. Critical, not warning: the report is this project's actual
+// deliverable, and this means it's been empty, not just degraded.
+const EMPTY_REPORT_STREAK = 2;
+const REPORT_SECTIONS_PATTERN = /^dates .*sections (\d+)/;
 
 /** derives user-facing health issues from already-fetched pipeline/source data -- pure
  *  function (no DB access) so it's directly testable and reusable between the dashboard's
@@ -76,6 +86,18 @@ export function computeSystemHealthIssues(
       issues.push({
         severity: 'warning',
         message: `최근 ${PRUNE_ERROR_STREAK}회 연속 데이터 정리(prune) 실패 — 저장공간이 서서히 찰 수 있습니다.`,
+      });
+    }
+
+    const sectionsCounts = collectRuns
+      .map((r) => r.reportResult?.match(REPORT_SECTIONS_PATTERN))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => Number(m[1]));
+    const recentSections = sectionsCounts.slice(0, EMPTY_REPORT_STREAK);
+    if (recentSections.length >= EMPTY_REPORT_STREAK && recentSections.every((n) => n === 0)) {
+      issues.push({
+        severity: 'critical',
+        message: `최근 ${EMPTY_REPORT_STREAK}회 연속 리포트에 담긴 항목이 0건입니다 — 후보 선정/관련성 판정 로직에 문제가 있을 수 있습니다.`,
       });
     }
   }

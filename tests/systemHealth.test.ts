@@ -115,6 +115,55 @@ describe('computeSystemHealthIssues', () => {
     expect(issues.some((i) => i.message.includes('데이터 정리'))).toBe(false);
   });
 
+  it('flags a critical issue when the last 2 attempted reports both had 0 sections', () => {
+    const runs = [
+      makeRun({
+        id: 2,
+        reportResult: 'dates 2026-09-27, sections 0, deep-analyzed 6/6, excluded-irrelevant 6, skipped {}',
+        startedAt: new Date(NOW.getTime() - 86_400_000),
+      }),
+      makeRun({
+        id: 1,
+        reportResult: 'dates 2026-09-26, sections 0, deep-analyzed 4/4, excluded-irrelevant 4, skipped {}',
+        startedAt: new Date(NOW.getTime() - 2 * 86_400_000),
+      }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'critical' && i.message.includes('0건'))).toBe(true);
+  });
+
+  it('does not flag an empty report from a single isolated 0-section run', () => {
+    const runs = [
+      makeRun({
+        id: 2,
+        reportResult: 'dates 2026-09-27, sections 0, deep-analyzed 6/6, excluded-irrelevant 6, skipped {}',
+        startedAt: new Date(NOW.getTime() - 86_400_000),
+      }),
+      makeRun({ id: 1, startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }), // default has sections 3
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('0건'))).toBe(false);
+  });
+
+  it('skips non-attempted reports (non-business day etc) when checking for the 0-section streak', () => {
+    // 2 real 0-section reports either side of a weekend skip must still count as consecutive
+    const runs = [
+      makeRun({
+        id: 3,
+        reportResult: 'dates 2026-09-28, sections 0, deep-analyzed 5/5, excluded-irrelevant 5, skipped {}',
+        startedAt: new Date(NOW.getTime() - 86_400_000),
+      }),
+      makeRun({ id: 2, reportResult: 'skipped: non-business day', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+      makeRun({
+        id: 1,
+        reportResult: 'dates 2026-09-25, sections 0, deep-analyzed 3/3, excluded-irrelevant 3, skipped {}',
+        startedAt: new Date(NOW.getTime() - 3 * 86_400_000),
+      }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('0건'))).toBe(true);
+  });
+
   it('flags a warning when 5+ sources have a 3+ consecutive-error streak', () => {
     const sources = Array.from({ length: 5 }, (_, i) => makeSourceHealth({ sourceId: `s${i}`, consecutiveErrors: 3 }));
     const issues = computeSystemHealthIssues([makeRun({})], sources, NOW);

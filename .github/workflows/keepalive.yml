@@ -32,3 +32,22 @@ jobs:
           git add .github/.keepalive
           git diff --staged --quiet || git commit -m "chore: keepalive (prevent 60-day scheduled-workflow auto-disable)"
           git push
+
+  # Catches a NEW high/critical vulnerability appearing in a dependency months after the last
+  # time anyone manually ran `npm audit` -- fails (red X in the Actions tab) if npm audit
+  # reports a high/critical advisory not already reviewed and listed in
+  # .github/npm-audit-allowlist.json. The one currently-known advisory (postcss, bundled inside
+  # Next.js, deliberately deferred -- see that file) is allowlisted so this doesn't fail every
+  # month on something already reviewed; only a genuinely new one trips it.
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Check for unreviewed high/critical vulnerabilities
+        run: |
+          npm audit --omit=dev --audit-level=high --json > /tmp/audit.json || true
+          node .github/scripts/check-audit-allowlist.mjs /tmp/audit.json .github/npm-audit-allowlist.json

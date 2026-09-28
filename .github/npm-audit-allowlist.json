@@ -1,0 +1,9 @@
+{
+  "accepted": [
+    "GHSA-qx2v-qp2m-jg93",
+    "GHSA-6g55-p6wh-862q",
+    "GHSA-fxqj-rqcc-2cmp",
+    "GHSA-r28c-9q8g-f849"
+  ],
+  "note": "postcss, bundled inside next@15.5.25 -- only fixable via a major Next.js 15->16 bump. Deliberately deferred: real exploitability is low (this single-tenant internal tool never processes attacker-controlled CSS), while a major bump risks breakage with nobody left to notice or fix it. See docs/market-intelligence-report-style-guide.md's history and project memory for the full reasoning. If this list ever needs a new id added, review it the same way first -- don't just add it to silence the check."
+}
