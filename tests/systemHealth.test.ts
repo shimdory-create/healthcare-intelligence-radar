@@ -257,6 +257,42 @@ describe('computeSystemHealthIssues', () => {
     const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
     expect(issues.some((i) => i.message.includes('리포트(.docx) 생성 실패'))).toBe(false);
   });
+
+  it('flags a warning when AI analysis has been disabled (missing GEMINI_API_KEY) for the last 2 runs in a row', () => {
+    const runs = [
+      makeRun({ id: 2, route: 'enrich', aiResult: 'GEMINI_API_KEY is not set', startedAt: new Date(NOW.getTime() - 3_600_000) }),
+      makeRun({ id: 1, route: 'enrich', aiResult: 'GEMINI_API_KEY is not set', startedAt: new Date(NOW.getTime() - 7_200_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'warning' && i.message.includes('AI 분석이 비활성 상태'))).toBe(true);
+  });
+
+  it('flags a warning when AI analysis has been disabled (FREE_ONLY unset) for the last 2 runs in a row', () => {
+    const runs = [
+      makeRun({ id: 2, aiResult: 'FREE_ONLY is not set to true', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, aiResult: 'FREE_ONLY is not set to true', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'warning' && i.message.includes('AI 분석이 비활성 상태'))).toBe(true);
+  });
+
+  it('does not flag AI-disabled from a single isolated run', () => {
+    const runs = [
+      makeRun({ id: 2, aiResult: 'GEMINI_API_KEY is not set', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }), // default has a real aiResult
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('AI 분석이 비활성 상태'))).toBe(false);
+  });
+
+  it('does not confuse a "cached only" run (no failure) with AI-disabled', () => {
+    const runs = [
+      makeRun({ id: 2, aiResult: 'analyzed 0, cached 15', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, aiResult: 'analyzed 0, cached 94', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('AI 분석이 비활성 상태'))).toBe(false);
+  });
 });
 
 describe('shouldSendCriticalAlert', () => {

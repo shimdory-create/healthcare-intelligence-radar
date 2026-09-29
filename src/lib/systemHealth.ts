@@ -1,5 +1,19 @@
 import type { PipelineRunRow, SourceHealthRow } from './db';
 
+// exact strings enrichArticles() (aiEnrichment.ts) returns as its `skipped` value when AI is
+// disabled by a missing/misconfigured env var, as opposed to a real Gemini failure. Defined
+// here (not in aiEnrichment.ts, which imports db.ts) and imported the other way around, so this
+// still-pure, no-DB-access module (see this file's own doc comment) doesn't gain a transitive
+// DB dependency just for two string literals -- aiEnrichment.ts already depends on db.ts
+// regardless, so importing them from here costs it nothing. In this deployment these vars are
+// always meant to be set, so either string appearing at all is always a regression, never an
+// intentional state, and neither matched any existing health check before 2026-09-29 (not an
+// "error:" prefix, not the "analyzed N, ..." pattern) -- the whole system would silently fall
+// back to keyword-only prioritization forever, with the daily digest's AI summaries just
+// quietly gone.
+export const AI_DISABLED_FREE_ONLY = 'FREE_ONLY is not set to true';
+export const AI_DISABLED_NO_API_KEY = 'GEMINI_API_KEY is not set';
+
 export interface SystemHealthIssue {
   severity: 'critical' | 'warning';
   message: string;
@@ -35,6 +49,12 @@ const KAKAO_ERROR_STREAK = 2;
 // so a persistently broken report generator could go unnoticed indefinitely as long as the
 // plain digest email kept sending.
 const REPORT_ERROR_STREAK = 2;
+// AI enrichment silently falling back to keyword-only prioritization forever (a missing/
+// misconfigured GEMINI_API_KEY or FREE_ONLY env var) was invisible to every check before
+// 2026-09-29 -- see AI_DISABLED_FREE_ONLY/AI_DISABLED_NO_API_KEY's doc comment in
+// aiEnrichment.ts. In this deployment these vars are always meant to be set, so this is never
+// a false positive.
+const AI_DISABLED_STREAK = 2;
 const BROKEN_SOURCE_THRESHOLD = 5;
 const SOURCE_ERROR_STREAK = 3;
 // prune failures degrade slowly (DB storage grows toward the free-tier cap over roughly a
@@ -122,6 +142,16 @@ export function computeSystemHealthIssues(
     issues.push({
       severity: 'warning',
       message: `최근 ${AI_ERROR_STREAK}회 연속 AI 분석 실패 — Gemini 모델/쿼터 문제일 수 있습니다.`,
+    });
+  }
+
+  const recentAiDisabled = runs
+    .slice(0, AI_DISABLED_STREAK)
+    .filter((r) => r.aiResult === AI_DISABLED_FREE_ONLY || r.aiResult === AI_DISABLED_NO_API_KEY);
+  if (recentAiDisabled.length >= AI_DISABLED_STREAK) {
+    issues.push({
+      severity: 'warning',
+      message: `최근 ${AI_DISABLED_STREAK}회 연속 AI 분석이 비활성 상태입니다 (${recentAiDisabled[0].aiResult}) — 환경변수가 실수로 지워졌을 수 있습니다. 규칙 기반 우선순위로만 동작 중입니다.`,
     });
   }
 

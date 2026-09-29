@@ -1,6 +1,7 @@
 import type { ArticleRow } from './db';
 import { getAiAnalysesForArticles, saveAiAnalysis, updateArticlePriority } from './db';
 import { analyzeArticles, contentHash } from './gemini';
+import { AI_DISABLED_FREE_ONLY, AI_DISABLED_NO_API_KEY } from './systemHealth';
 
 /** Gemini's free tier easily covers a full day's ~70-100 articles in ~8-10 batched calls
  *  (well under the 1,000+ requests/day free limit), so every collected article gets analyzed --
@@ -35,10 +36,10 @@ export interface EnrichmentResult {
  *  a single slow-but-not-erroring Gemini batch must never eat the whole remaining budget. */
 export async function enrichArticles(articles: ArticleRow[], deadlineMs?: number): Promise<EnrichmentResult> {
   if (process.env.FREE_ONLY !== 'true') {
-    return { analyzed: 0, cached: 0, skipped: 'FREE_ONLY is not set to true', stoppedEarly: false, failedBatches: 0 };
+    return { analyzed: 0, cached: 0, skipped: AI_DISABLED_FREE_ONLY, stoppedEarly: false, failedBatches: 0 };
   }
   if (!process.env.GEMINI_API_KEY) {
-    return { analyzed: 0, cached: 0, skipped: 'GEMINI_API_KEY is not set', stoppedEarly: false, failedBatches: 0 };
+    return { analyzed: 0, cached: 0, skipped: AI_DISABLED_NO_API_KEY, stoppedEarly: false, failedBatches: 0 };
   }
 
   const existingByArticleId = new Map(
