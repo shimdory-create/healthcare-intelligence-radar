@@ -1,0 +1,42 @@
+name: CI
+
+# Runs the full verification suite (typecheck, tests, build) on every push to master. This repo
+# deploys straight to production on every push -- no staging environment, no PR review gate --
+# so this is the only automated backstop against a broken commit reaching prod. A failed Vercel
+# build alone is self-healing (production stays on the last good deployment), but a change that
+# builds fine yet breaks at runtime (a wrong query, a logic bug typecheck can't see) has nothing
+# else catching it before it's live. Found missing during the 2026-09-29 sustainability audit:
+# every push this session was manually verified (typecheck/test/build) before pushing, but that
+# discipline lives in the person or session doing the pushing, not in the repo -- a future
+# session (this one or a different AI assistant) skipping that step would have nothing to stop
+# it. A failing run shows as a red X in the Actions tab and (per GitHub's default notification
+# settings) emails the repo owner, the same passive safety net already relied on elsewhere in
+# this project for genuine crashes.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # dummy values, not real secrets -- db.ts throws at import time if DATABASE_URL is unset
+    # (satisfying that guard is all typecheck/test/build need), and the `postgres` client is
+    # lazy (no real connection attempt happens until a query actually runs, which none of these
+    # three commands do) -- verified locally 2026-09-29 that a fake connection string is
+    # sufficient for all three to pass with no real DB reachable. Keeping this dummy rather than
+    # wiring in the real DATABASE_URL as a GH secret is deliberate: CI has no legitimate need for
+    # real prod DB access, so it shouldn't have the credential.
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      CRON_SECRET: ci-dummy
+      KAKAO_STATE_SECRET: ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
