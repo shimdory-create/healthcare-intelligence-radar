@@ -30,34 +30,55 @@ const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 // concurrency guard on intraday-collect.yml already prevents that for 'enrich', and 'collect'
 // only ever runs once daily via Vercel's own cron.
 //
-// 6700ms -> ~9 req/min, NOT simply "a safety margin under 15" -- this project's Gemini traffic
+// 8600ms -> ~7 req/min, NOT simply "a safety margin under 15" -- this project's Gemini traffic
 // currently shares its Google Cloud project's quota with an unrelated project on the same
 // machine ("cafe-recommender" / "빵지순례") that was assumed separated on 2026-09-28 but
 // turned out not to be (their code needs a real service-account/OAuth rework to actually move
 // to a different project, not just a new API key string -- a bigger lift, not done yet). Until
-// that lands, the two projects have agreed to split the shared 15 RPM ceiling: healthcare-radar
-// takes 9, cafe-recommender takes 6 (their own limiter, not this file). This number is a
-// negotiated interim split, not purely a technical margin -- once cafe-recommender's real
-// separation ships, this can safely go back up toward 13-14 RPM (~4500ms), since this project's
-// own usage alone was never close to 15 RPM (peaked at 18 only due to the two projects'
-// combined/overlapping traffic).
-const MIN_GEMINI_CALL_INTERVAL_MS = 6700;
+// that lands, the two projects have agreed to split the shared 15 RPM ceiling with a buffer
+// rather than grazing it exactly: healthcare-radar takes 7, cafe-recommender takes 5, leaving
+// 3 RPM of shared slack (revised 2026-09-28, down from an initial 9/6 split that left none --
+// found live that a zero-margin split still occasionally lost a batch to a 429/503 whenever
+// both projects' traffic happened to land in the same instant). Once cafe-recommender's real
+// separation ships, this can go back up toward 13-14 RPM (~4500ms), since this project's own
+// usage alone was never close to 15 RPM (an 18 RPM peak was combined/overlapping traffic from
+// both projects, not healthcare-radar alone).
+const MIN_GEMINI_CALL_INTERVAL_MS = 8600;
+
+// On top of the static split above, back off further for a few calls right after actually
+// hitting a 429/503 -- the static budget only bounds each side's SUSTAINED rate; it can't
+// prevent the instant where both projects' traffic happens to land in the same moment and
+// briefly exceeds 15 combined. Self-contained (no coordination with cafe-recommender needed):
+// doubles the wait for the next few calls, then resets to normal as soon as one succeeds again.
+const MAX_BACKOFF_MULTIPLIER = 4;
+const BACKOFF_MULTIPLIER_STEP = 2;
+let backoffMultiplier = 1;
 let lastGeminiCallAt = 0;
 
-/** resets the rate limiter's internal clock -- exported ONLY for test isolation (module state
- *  otherwise persists across every `it()` in the same test file, which would either make later
- *  tests wait for real or make an intentional throttle test flaky depending on prior tests'
- *  timing). Never called from production code. */
+/** resets the rate limiter's internal clock and backoff state -- exported ONLY for test
+ *  isolation (module state otherwise persists across every `it()` in the same test file, which
+ *  would either make later tests wait for real or make an intentional throttle test flaky
+ *  depending on prior tests' timing/outcomes). Never called from production code. */
 export function __resetGeminiRateLimiterForTests(): void {
   lastGeminiCallAt = 0;
+  backoffMultiplier = 1;
 }
 
 async function waitForGeminiRateLimit(): Promise<void> {
+  const interval = MIN_GEMINI_CALL_INTERVAL_MS * backoffMultiplier;
   const elapsed = Date.now() - lastGeminiCallAt;
-  if (elapsed < MIN_GEMINI_CALL_INTERVAL_MS) {
-    await new Promise((resolve) => setTimeout(resolve, MIN_GEMINI_CALL_INTERVAL_MS - elapsed));
+  if (elapsed < interval) {
+    await new Promise((resolve) => setTimeout(resolve, interval - elapsed));
   }
   lastGeminiCallAt = Date.now();
+}
+
+/** true for the specific error shapes that mean "you're going too fast" (429 quota/rate-limit,
+ *  503 the "high demand" shape seen live 2026-09-28) -- backing off helps recover from these.
+ *  Deliberately narrow: a 400 (malformed request) or 401/403 (bad key) means something else is
+ *  wrong, and slowing down would just delay surfacing that real problem for no benefit. */
+function isRateLimitStatus(status: number): boolean {
+  return status === 429 || status === 503;
 }
 
 const RESPONSE_SCHEMA = {
@@ -147,8 +168,15 @@ async function callGemini(prompt: string, schema: object): Promise<unknown> {
     },
   );
   if (!res.ok) {
+    if (isRateLimitStatus(res.status)) {
+      backoffMultiplier = Math.min(backoffMultiplier * BACKOFF_MULTIPLIER_STEP, MAX_BACKOFF_MULTIPLIER);
+    }
     throw new Error(`Gemini API error ${res.status}: ${await res.text()}`);
   }
+  // a successful call means whatever contention caused a prior backoff (if any) has passed --
+  // reset immediately rather than decaying gradually, since a serverless invocation is short-
+  // lived enough that "the next several calls" would otherwise mean "most of this run"
+  backoffMultiplier = 1;
 
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;

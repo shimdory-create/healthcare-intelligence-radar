@@ -334,7 +334,7 @@ describe('Gemini call rate limiting', () => {
     expect(Date.now() - start).toBeLessThan(500);
   });
 
-  it('delays a second call that lands within 6.7s of the first, to stay within healthcare-radar\'s agreed 9 RPM share of the 15 RPM free-tier ceiling (2026-09-28: shared with cafe-recommender until its own project separation ships)', async () => {
+  it('delays a second call that lands within 8.6s of the first, to stay within healthcare-radar\'s agreed 7 RPM share of the 15 RPM free-tier ceiling (2026-09-28: shared with cafe-recommender until its own project separation ships)', async () => {
     process.env.GEMINI_API_KEY = 'test-key';
     mockGeminiResponse(
       JSON.stringify([{ article_id: 1, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
@@ -349,12 +349,104 @@ describe('Gemini call rate limiting', () => {
         secondResolved = true;
       });
 
-      await vi.advanceTimersByTimeAsync(2000);
-      expect(secondResolved).toBe(false); // only 2s of the required 6.7s gap has passed
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(secondResolved).toBe(false); // only 3s of the required 8.6s gap has passed
 
-      await vi.advanceTimersByTimeAsync(5000); // now 7s total since the first call
+      await vi.advanceTimersByTimeAsync(6000); // now 9s total since the first call
       await second;
       expect(secondResolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('doubles the wait after a 429/503 (rate-limit-shaped) failure, self-contained backoff on top of the static split (2026-09-28, second follow-up: a zero-margin static split still occasionally lost a batch to the two projects\' traffic landing in the same instant)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'high demand' }),
+    );
+
+    vi.useFakeTimers();
+    try {
+      await expect(analyzeArticles([{ id: 1, title: 't', snippet: 's' }])).rejects.toThrow();
+
+      mockGeminiResponse(
+        JSON.stringify([{ article_id: 2, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
+      );
+      let secondResolved = false;
+      const second = analyzeArticles([{ id: 2, title: 't2', snippet: 's2' }]).then(() => {
+        secondResolved = true;
+      });
+
+      // normally an 8.6s gap would be enough, but the backoff doubled it to ~17.2s after the 503
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(secondResolved).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(9000); // now ~18s total since the first call
+      await second;
+      expect(secondResolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not back off for a non-rate-limit error (e.g. a malformed request) -- slowing down would not help', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad request' }),
+    );
+
+    await expect(analyzeArticles([{ id: 1, title: 't', snippet: 's' }])).rejects.toThrow();
+
+    mockGeminiResponse(
+      JSON.stringify([{ article_id: 2, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
+    );
+
+    vi.useFakeTimers();
+    try {
+      let secondResolved = false;
+      const second = analyzeArticles([{ id: 2, title: 't2', snippet: 's2' }]).then(() => {
+        secondResolved = true;
+      });
+
+      // the normal 8.6s gap (unaffected by the 400) is enough -- if a 400 had wrongly
+      // triggered backoff, this would still be waiting at the doubled ~17.2s mark
+      await vi.advanceTimersByTimeAsync(9000);
+      await second;
+      expect(secondResolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets the backoff back to normal as soon as a call succeeds again', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'high demand' }),
+    );
+
+    vi.useFakeTimers();
+    try {
+      await expect(analyzeArticles([{ id: 1, title: 't', snippet: 's' }])).rejects.toThrow();
+
+      mockGeminiResponse(
+        JSON.stringify([{ article_id: 2, priority: 'high', summary: 's', implications: [], watch_point: 'w' }]),
+      );
+      await vi.advanceTimersByTimeAsync(20000); // clear the post-503 backoff wait
+      await analyzeArticles([{ id: 2, title: 't2', snippet: 's2' }]); // this call succeeds -> resets
+
+      let thirdResolved = false;
+      const third = analyzeArticles([{ id: 3, title: 't3', snippet: 's3' }]).then(() => {
+        thirdResolved = true;
+      });
+
+      // back to the normal 8.6s gap, not the doubled 17.2s -- proves the reset took effect
+      await vi.advanceTimersByTimeAsync(9000);
+      await third;
+      expect(thirdResolved).toBe(true);
     } finally {
       vi.useRealTimers();
     }
