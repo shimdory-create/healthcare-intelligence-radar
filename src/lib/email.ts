@@ -1,6 +1,7 @@
 import type { ArticleRow, PriorityCounts, AiAnalysis, DuplicateRef } from './db';
 import { sourceDisplayName, TIER_LABELS } from './sourceLookup';
 import { PRIORITY_LABELS } from './priority';
+import type { SystemHealthIssue } from './systemHealth';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -154,6 +155,58 @@ export async function sendDigestEmail(
       subject: `[헬스케어 레이더] ${dateLabel} 수집 요약 (${counts.total}건)`,
       html,
       ...(attachments.length > 0 ? { attachments } : {}),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend API error ${res.status}: ${body}`);
+  }
+}
+
+/** the dashboard's health banner (systemHealth.ts) is pull-based -- only visible to someone who
+ *  opens the dashboard. This is the push side for `critical` issues specifically, so a real
+ *  problem gets noticed during a stretch with nobody actively watching (see
+ *  criticalAlert.ts for the cooldown logic that keeps this to roughly once/day per issue). */
+export function buildCriticalAlertHtml(issues: SystemHealthIssue[], dashboardUrl: string): string {
+  const items = issues.map((i) => `<li style="margin:0 0 8px;">${escapeHtml(i.message)}</li>`).join('');
+  return `
+    <div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#ffffff;color:#111;">
+      <h2 style="margin:0 0 4px;color:#c0392b;">⚠️ 헬스케어 레이더 — 시스템 상태 확인 필요</h2>
+      <p style="color:#666;margin:0 0 12px;font-size:13px;">아무도 대시보드를 안 보고 있을 수 있어 자동으로 보내는 알림입니다.</p>
+      <ul style="font-size:14px;line-height:1.6;padding-left:20px;margin:0;">${items}</ul>
+      <p style="margin:16px 0 0;font-size:13px;"><a href="${escapeHtml(dashboardUrl)}" style="color:#111;">대시보드에서 자세히 보기 →</a></p>
+    </div>`;
+}
+
+/** sends the critical-issue alert email; does nothing if there are no issues to report. Throws
+ *  the same way sendDigestEmail does (missing config, non-ok Resend response) -- the caller
+ *  (criticalAlert.ts) is expected to catch, matching every other end-of-route bookkeeping call
+ *  in the cron routes. */
+export async function sendCriticalAlertEmail(issues: SystemHealthIssue[]): Promise<void> {
+  if (issues.length === 0) return;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.EMAIL_TO?.split(',')
+    .map((addr) => addr.trim())
+    .filter(Boolean);
+  if (!apiKey || !to || to.length === 0) {
+    throw new Error('RESEND_API_KEY or EMAIL_TO is not set');
+  }
+
+  const html = buildCriticalAlertHtml(issues, resolveDashboardUrl());
+
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM ?? 'Healthcare Radar <onboarding@resend.dev>',
+      to,
+      subject: `[헬스케어 레이더] ⚠️ 시스템 상태 확인 필요 (critical ${issues.length}건)`,
+      html,
     }),
   });
 

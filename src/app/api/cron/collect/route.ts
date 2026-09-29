@@ -23,6 +23,7 @@ import { analyzeCandidatesDeep } from '@/lib/reportAnalysis';
 import { buildReportSections, buildReportDocx, buildReportEmailHtml } from '@/lib/report';
 import { datesSince, previousKstDate } from '@/lib/reportSchedule';
 import { isNonBusinessDay } from '@/lib/holidays';
+import { checkAndSendCriticalAlert } from '@/lib/criticalAlert';
 
 export const maxDuration = 300;
 
@@ -229,5 +230,11 @@ export async function GET(req: NextRequest) {
     pruneResult: prune,
   }).catch(() => {});
 
-  return NextResponse.json({ summary, email, kakao, ai, dedupe, report, prune });
+  // runs after recordPipelineRun so this run's own outcome is already visible to the health
+  // check it does internally -- pushes a `critical` alert by email (cooldown-limited, see
+  // systemHealth.ts) so a real problem is noticed even if nobody opens the dashboard for a
+  // while. Must never fail the route, same reasoning as everything else in this block.
+  const alert = await checkAndSendCriticalAlert().catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+  return NextResponse.json({ summary, email, kakao, ai, dedupe, report, prune, alert });
 }

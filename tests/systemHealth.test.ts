@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSystemHealthIssues } from '@/lib/systemHealth';
+import { computeSystemHealthIssues, shouldSendCriticalAlert } from '@/lib/systemHealth';
 import type { PipelineRunRow, SourceHealthRow } from '@/lib/db';
 
 const NOW = new Date('2026-09-24T00:00:00Z');
@@ -201,5 +201,26 @@ describe('computeSystemHealthIssues', () => {
     const sources = Array.from({ length: 4 }, (_, i) => makeSourceHealth({ sourceId: `s${i}`, consecutiveErrors: 3 }));
     const issues = computeSystemHealthIssues([makeRun({})], sources, NOW);
     expect(issues.some((i) => i.message.includes('소스가 연속 오류'))).toBe(false);
+  });
+});
+
+describe('shouldSendCriticalAlert', () => {
+  it('sends when no alert has ever been sent', () => {
+    expect(shouldSendCriticalAlert(NOW, null)).toBe(true);
+  });
+
+  it('does not send again within the 20h cooldown', () => {
+    const lastSentAt = new Date(NOW.getTime() - 19 * 3_600_000);
+    expect(shouldSendCriticalAlert(NOW, lastSentAt)).toBe(false);
+  });
+
+  it('sends again once the cooldown has fully elapsed', () => {
+    const lastSentAt = new Date(NOW.getTime() - 21 * 3_600_000);
+    expect(shouldSendCriticalAlert(NOW, lastSentAt)).toBe(true);
+  });
+
+  it('sends exactly at the cooldown boundary (>=, not >)', () => {
+    const lastSentAt = new Date(NOW.getTime() - 20 * 3_600_000);
+    expect(shouldSendCriticalAlert(NOW, lastSentAt)).toBe(true);
   });
 });

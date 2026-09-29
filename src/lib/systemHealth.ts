@@ -135,3 +135,21 @@ export function computeSystemHealthIssues(
 
   return issues;
 }
+
+// the dashboard banner only shows an issue to someone who opens the dashboard -- during a
+// stretch with nobody watching (the whole reason this project needs to survive unattended),
+// that's not enough. A critical issue also gets emailed via criticalAlert.ts, but only once
+// per this cooldown window while it persists, not on every cron run that notices it (enrich
+// runs every 2h; without a cooldown that's up to 12 emails/day for one ongoing problem). 20h,
+// not 24h, so a persisting issue reliably gets a fresh reminder once per calendar day rather
+// than drifting later each day from small scheduling jitter.
+const CRITICAL_ALERT_COOLDOWN_HOURS = 20;
+
+/** pure cooldown check -- true when enough time has passed since the last alert email (or none
+ *  was ever sent) that a new one should go out now. Kept separate from the DB-touching send
+ *  logic in criticalAlert.ts so the cooldown math itself is directly unit-testable. */
+export function shouldSendCriticalAlert(now: Date, lastSentAt: Date | null): boolean {
+  if (!lastSentAt) return true;
+  const hoursSinceLastAlert = (now.getTime() - lastSentAt.getTime()) / 3_600_000;
+  return hoursSinceLastAlert >= CRITICAL_ALERT_COOLDOWN_HOURS;
+}

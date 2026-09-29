@@ -5,6 +5,7 @@ import { enrichArticles } from '@/lib/aiEnrichment';
 import { demoteDuplicatePriorities } from '@/lib/duplicates';
 import { isNonBusinessDay } from '@/lib/holidays';
 import { todayKstDate } from '@/lib/dateFormat';
+import { checkAndSendCriticalAlert } from '@/lib/criticalAlert';
 
 // Collect + AI-enrich + dedupe only -- no report, no email/kakao send. Triggered several
 // times during KST business hours (see the GitHub Actions workflow) so each run only has a
@@ -61,5 +62,10 @@ export async function GET(req: NextRequest) {
     dedupeResult: dedupe,
   }).catch(() => {});
 
-  return NextResponse.json({ summary, ai, dedupe });
+  // this route runs 12x/day, far more often than 'collect' -- checking here too (not just
+  // there) means a critical issue gets noticed within ~2h instead of up to 24h. The cooldown
+  // in systemHealth.ts keeps either route's checks from turning that into a flood of emails.
+  const alert = await checkAndSendCriticalAlert().catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+
+  return NextResponse.json({ summary, ai, dedupe, alert });
 }

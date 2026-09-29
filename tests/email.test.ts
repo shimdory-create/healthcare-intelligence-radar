@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDigestHtml } from '@/lib/email';
+import { buildDigestHtml, buildCriticalAlertHtml } from '@/lib/email';
 import type { ArticleRow, PriorityCounts, AiAnalysis, DuplicateRef } from '@/lib/db';
 
 const COUNTS: PriorityCounts = { total: 2, high: 1, medium: 1, low: 0, aiAnalyzed: 2 };
@@ -140,5 +140,31 @@ describe('buildDigestHtml', () => {
     const article = makeArticle({ id: 1 });
     const html = buildDigestHtml([article], COUNTS, '9월 3일 (목)', 'https://healthcare-radar.vercel.app');
     expect(html).not.toContain('Healthcare Market Intelligence');
+  });
+});
+
+describe('buildCriticalAlertHtml', () => {
+  it('lists every issue message and links to the dashboard', () => {
+    const html = buildCriticalAlertHtml(
+      [
+        { severity: 'critical', message: '마지막 파이프라인 실행이 30시간 전입니다 — 스케줄러가 멈췄을 수 있습니다.' },
+        { severity: 'critical', message: '최근 리포트 이메일 발송 실패: error: Resend API error 401' },
+      ],
+      'https://healthcare-radar.vercel.app',
+    );
+
+    expect(html).toContain('스케줄러가 멈췄을 수 있습니다');
+    expect(html).toContain('최근 리포트 이메일 발송 실패');
+    expect(html).toContain('https://healthcare-radar.vercel.app');
+  });
+
+  it('escapes HTML in the issue message', () => {
+    const html = buildCriticalAlertHtml(
+      [{ severity: 'critical', message: '<script>alert(1)</script>' }],
+      'https://healthcare-radar.vercel.app',
+    );
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
   });
 });
