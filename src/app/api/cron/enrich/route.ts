@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { collectAll } from '@/lib/collect';
+import { collectAll, type CollectionSummary } from '@/lib/collect';
 import { getRecentArticles, getLatestCollectionDate, recordPipelineRun } from '@/lib/db';
 import { enrichArticles } from '@/lib/aiEnrichment';
 import { demoteDuplicatePriorities } from '@/lib/duplicates';
@@ -32,7 +32,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ summary: 'skipped: non-business day' });
   }
 
-  const summary = await collectAll();
+  // Wrapped in try/catch (2026-09-29) for the same reason as the 'collect' route: an unguarded
+  // throw from collectAll() (e.g. syncSources() hitting a DB hiccup) used to crash this whole
+  // route before recordPipelineRun/checkAndSendCriticalAlert ever ran -- see that route's
+  // comment for the full reasoning.
+  let summary: CollectionSummary[] | null = null;
+  let collectResult: string | null = null;
+  try {
+    summary = await collectAll();
+  } catch (err) {
+    collectResult = `error: ${err instanceof Error ? err.message : String(err)}`;
+  }
   const collectedDate = await getLatestCollectionDate();
 
   let ai = 'no-collection-date';
@@ -58,6 +68,7 @@ export async function GET(req: NextRequest) {
     route: 'enrich',
     startedAt: new Date(routeStart),
     finishedAt: new Date(),
+    collectResult,
     aiResult: ai,
     dedupeResult: dedupe,
   }).catch(() => {});

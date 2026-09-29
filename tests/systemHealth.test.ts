@@ -10,6 +10,7 @@ function makeRun(overrides: Partial<PipelineRunRow>): PipelineRunRow {
     route: 'collect',
     startedAt: NOW,
     finishedAt: NOW,
+    collectResult: null,
     aiResult: 'analyzed 10, cached 0',
     dedupeResult: 'demoted 0 across 0 groups',
     reportResult: 'dates 2026-09-23, sections 3, deep-analyzed 4/4, excluded-irrelevant 0, skipped {}',
@@ -201,6 +202,60 @@ describe('computeSystemHealthIssues', () => {
     const sources = Array.from({ length: 4 }, (_, i) => makeSourceHealth({ sourceId: `s${i}`, consecutiveErrors: 3 }));
     const issues = computeSystemHealthIssues([makeRun({})], sources, NOW);
     expect(issues.some((i) => i.message.includes('소스가 연속 오류'))).toBe(false);
+  });
+
+  it('flags a critical issue when collectAll() itself failed on the last 2 runs in a row (any route)', () => {
+    const runs = [
+      makeRun({ id: 2, route: 'enrich', collectResult: 'error: syncSources: connection refused', startedAt: new Date(NOW.getTime() - 3_600_000) }),
+      makeRun({ id: 1, route: 'enrich', collectResult: 'error: syncSources: connection refused', startedAt: new Date(NOW.getTime() - 7_200_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'critical' && i.message.includes('수집(collectAll) 자체가 실패'))).toBe(true);
+  });
+
+  it('does not flag collectAll failure from a single isolated run', () => {
+    const runs = [
+      makeRun({ id: 2, collectResult: 'error: transient', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, collectResult: null, startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('수집(collectAll) 자체가 실패'))).toBe(false);
+  });
+
+  it('flags a warning when Kakao send failed on the last 2 collect runs in a row', () => {
+    const runs = [
+      makeRun({ id: 2, kakaoResult: 'error: Kakao token refresh failed: 400', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, kakaoResult: 'error: Kakao token refresh failed: 400', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'warning' && i.message.includes('카카오 발송 실패'))).toBe(true);
+  });
+
+  it('does not flag Kakao failure from a single isolated run', () => {
+    const runs = [
+      makeRun({ id: 2, kakaoResult: 'error: transient', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, kakaoResult: 'sent', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('카카오 발송 실패'))).toBe(false);
+  });
+
+  it('flags a critical issue when report generation itself errored on the last 2 collect runs in a row', () => {
+    const runs = [
+      makeRun({ id: 2, reportResult: 'error: docx build failed', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, reportResult: 'error: docx build failed', startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }),
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'critical' && i.message.includes('리포트(.docx) 생성 실패'))).toBe(true);
+  });
+
+  it('does not flag report-generation failure from a single isolated run', () => {
+    const runs = [
+      makeRun({ id: 2, reportResult: 'error: transient', startedAt: new Date(NOW.getTime() - 86_400_000) }),
+      makeRun({ id: 1, startedAt: new Date(NOW.getTime() - 2 * 86_400_000) }), // default has sections 3
+    ];
+    const issues = computeSystemHealthIssues(runs, [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('리포트(.docx) 생성 실패'))).toBe(false);
   });
 });
 

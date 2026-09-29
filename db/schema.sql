@@ -102,6 +102,13 @@ create index if not exists idx_pipeline_runs_started_at on pipeline_runs (starte
 -- health banner instead of only appearing in that one cron invocation's HTTP response.
 alter table pipeline_runs add column if not exists prune_result text;
 
+-- records collectAll()'s own outcome (esp. an uncaught throw, e.g. syncSources() hitting a DB
+-- hiccup) now that both cron routes wrap that call in try/catch instead of letting it crash the
+-- whole route. Added 2026-09-29: before this, a crash here skipped recordPipelineRun AND the
+-- critical-alert check entirely, so the exact mechanism meant to catch a total failure could
+-- never fire if the failure was total enough. Null on success (the common case).
+alter table pipeline_runs add column if not exists collect_result text;
+
 -- optional AI enrichment (Gemini free tier). Every collected article is analyzed (or
 -- re-analyzed only if its content_hash changed since last time, so an unchanged article
 -- never re-spends quota); its priority band here is copied onto articles.priority,

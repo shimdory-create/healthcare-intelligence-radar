@@ -14,6 +14,27 @@ const STALE_RUN_HOURS = 26;
 // the report itself has stopped going out.
 const NO_COLLECT_DAYS = 4;
 const AI_ERROR_STREAK = 2;
+// collectAll() itself throwing (e.g. syncSources() hitting a DB hiccup) is now caught by both
+// cron routes instead of crashing them outright (2026-09-29) -- see collect/route.ts's comment.
+// That fix means recordPipelineRun/checkAndSendCriticalAlert always run even when collection
+// itself failed, so this streak is what keeps a *persistent* collection failure detectable --
+// without it, a route that "completes" every time (even though collectAll() failed inside it)
+// would never trip STALE_RUN_HOURS/NO_COLLECT_DAYS, since those only look at whether a run was
+// recorded at all, not whether it actually collected anything. Checked across ALL routes (not
+// just 'collect') since 'enrich' hits collectAll() 12x/day too.
+const COLLECT_ERROR_STREAK = 2;
+// Kakao is a secondary channel (email is primary, see collect/route.ts's sendKakaoDigest
+// comment) so this is a warning, not critical -- but before 2026-09-29 a broken Kakao channel
+// (e.g. an expired OAuth refresh token) was invisible to every health check forever, since only
+// emailResult was ever checked.
+const KAKAO_ERROR_STREAK = 2;
+// the .docx report is this project's actual deliverable (same reasoning as EMPTY_REPORT_STREAK
+// above) -- before 2026-09-29, a reportResult of "error: ..." (an uncaught throw inside the
+// report-generation try/catch never happens -- see report/route.ts -- but a caught one still
+// produced this shape) matched neither this check nor EMPTY_REPORT_STREAK's "dates ..." pattern,
+// so a persistently broken report generator could go unnoticed indefinitely as long as the
+// plain digest email kept sending.
+const REPORT_ERROR_STREAK = 2;
 const BROKEN_SOURCE_THRESHOLD = 5;
 const SOURCE_ERROR_STREAK = 3;
 // prune failures degrade slowly (DB storage grows toward the free-tier cap over roughly a
@@ -84,6 +105,26 @@ export function computeSystemHealthIssues(
     });
   }
 
+  const recentCollectErrors = runs.slice(0, COLLECT_ERROR_STREAK).filter((r) => r.collectResult?.startsWith('error'));
+  if (recentCollectErrors.length >= COLLECT_ERROR_STREAK) {
+    issues.push({
+      severity: 'critical',
+      message: `최근 ${COLLECT_ERROR_STREAK}회 연속 기사 수집(collectAll) 자체가 실패했습니다: ${recentCollectErrors[0].collectResult}`,
+    });
+  }
+
+  // across ALL routes, not just 'collect' -- 'enrich' hits Gemini 12x/day and an uncaught
+  // throw there (e.g. a DB read inside enrichArticles) used to match neither this check (which
+  // only looked at 'collect') nor AI_TOTAL_FAILURE_STREAK (whose pattern only matches the
+  // "analyzed N, ..." shape, not a raw "error: ..." string) -- found in the 2026-09-29 audit.
+  const recentAiErrors = runs.slice(0, AI_ERROR_STREAK).filter((r) => r.aiResult?.startsWith('error'));
+  if (recentAiErrors.length >= AI_ERROR_STREAK) {
+    issues.push({
+      severity: 'warning',
+      message: `최근 ${AI_ERROR_STREAK}회 연속 AI 분석 실패 — Gemini 모델/쿼터 문제일 수 있습니다.`,
+    });
+  }
+
   const collectRuns = runs.filter((r) => r.route === 'collect');
   if (collectRuns.length > 0) {
     const lastCollect = collectRuns[0];
@@ -99,11 +140,19 @@ export function computeSystemHealthIssues(
       issues.push({ severity: 'critical', message: `최근 리포트 이메일 발송 실패: ${lastCollect.emailResult}` });
     }
 
-    const recentAiErrors = collectRuns.slice(0, AI_ERROR_STREAK).filter((r) => r.aiResult?.startsWith('error'));
-    if (recentAiErrors.length >= AI_ERROR_STREAK) {
+    const recentKakaoErrors = collectRuns.slice(0, KAKAO_ERROR_STREAK).filter((r) => r.kakaoResult?.startsWith('error'));
+    if (recentKakaoErrors.length >= KAKAO_ERROR_STREAK) {
       issues.push({
         severity: 'warning',
-        message: `최근 ${AI_ERROR_STREAK}회 연속 AI 분석 실패 — Gemini 모델/쿼터 문제일 수 있습니다.`,
+        message: `최근 ${KAKAO_ERROR_STREAK}회 연속 카카오 발송 실패: ${recentKakaoErrors[0].kakaoResult} — OAuth 토큰 만료 가능성.`,
+      });
+    }
+
+    const recentReportErrors = collectRuns.slice(0, REPORT_ERROR_STREAK).filter((r) => r.reportResult?.startsWith('error'));
+    if (recentReportErrors.length >= REPORT_ERROR_STREAK) {
+      issues.push({
+        severity: 'critical',
+        message: `최근 ${REPORT_ERROR_STREAK}회 연속 리포트(.docx) 생성 실패: ${recentReportErrors[0].reportResult}`,
       });
     }
 

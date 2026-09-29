@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { collectAll } from '@/lib/collect';
+import { collectAll, type CollectionSummary } from '@/lib/collect';
 import {
   getRecentArticles,
   getPriorityCounts,
@@ -110,7 +110,22 @@ export async function GET(req: NextRequest) {
   // reasoning as before: collection/AI/dedupe must never silently stop just because today
   // happens to be a non-business day, or a later business day's watermark-driven report
   // would be missing whatever came in today.
-  const summary = await collectAll();
+  //
+  // Wrapped in try/catch (2026-09-29): collectSource/collectSourceWithBudget already isolate
+  // per-source failures, but collectAll() also calls syncSources() first -- if THAT throws
+  // (e.g. a transient DB hiccup), an unguarded call here used to crash the whole route before
+  // recordPipelineRun or checkAndSendCriticalAlert ever ran, so the mechanism meant to catch a
+  // total failure couldn't fire if the failure was total enough. Falling through instead means
+  // this run's own collection is lost, but AI/dedupe/report/email/kakao still proceed against
+  // whatever was already collected by earlier runs, and the failure itself becomes visible via
+  // collectResult below.
+  let summary: CollectionSummary[] | null = null;
+  let collectResult: string | null = null;
+  try {
+    summary = await collectAll();
+  } catch (err) {
+    collectResult = `error: ${err instanceof Error ? err.message : String(err)}`;
+  }
   const collectedDate = await getLatestCollectionDate();
 
   let ai = 'no-collection-date';
@@ -222,6 +237,7 @@ export async function GET(req: NextRequest) {
     route: 'collect',
     startedAt: new Date(routeStart),
     finishedAt: new Date(),
+    collectResult,
     aiResult: ai,
     dedupeResult: dedupe,
     reportResult: report,
