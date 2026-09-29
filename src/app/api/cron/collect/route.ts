@@ -54,18 +54,30 @@ const REPORT_RESERVE_MS = 80_000;
 // old business-day-calendar rollup once collection moved to several times a day.
 const LAST_REPORT_DATE_KEY = 'last_report_date';
 
+// row cap for a single getRecentArticles() call -- see loadBatch's comment for why 500 (the
+// original value) was already too close to real daily volume to be safe.
+const LOAD_LIMIT = 3000;
+
 interface ReportBatch {
   reportDates: string[];
   articles: ArticleRow[];
   counts: PriorityCounts;
+  /** true when this batch hit LOAD_LIMIT and real articles were left out -- see loadBatch. */
+  truncated: boolean;
 }
 
 async function loadBatch(reportDates: string[]): Promise<ReportBatch> {
-  const [{ articles }, counts] = await Promise.all([
-    getRecentArticles({ collectedDate: reportDates, limit: 500 }),
+  const [{ articles, hasNextPage }, counts] = await Promise.all([
+    // LOAD_LIMIT, not a smaller round number: real daily volume already hits 300-365 on a busy
+    // day (found live 2026-09-29), and reportDates routinely spans 2+ days after every
+    // business-day gap (weekends, holidays) via datesSince's watermark rollup -- the previous
+    // 500 cap was already within one busy day of silently truncating the digest/report with no
+    // signal at all. truncatedNote below is a last-resort net in case volume ever outgrows even
+    // this.
+    getRecentArticles({ collectedDate: reportDates, limit: LOAD_LIMIT }),
     getPriorityCounts(reportDates),
   ]);
-  return { reportDates, articles, counts };
+  return { reportDates, articles, counts, truncated: hasNextPage };
 }
 
 async function sendEmailDigest(
@@ -88,7 +100,7 @@ async function sendEmailDigest(
     reportDocxBuffer,
     labelDate,
   );
-  return 'sent';
+  return batch.truncated ? `sent (TRUNCATED: hit ${LOAD_LIMIT}-article load limit)` : 'sent';
 }
 
 async function sendKakaoDigest(batch: ReportBatch, labelDate: string): Promise<string> {
@@ -96,7 +108,7 @@ async function sendKakaoDigest(batch: ReportBatch, labelDate: string): Promise<s
   const { counts } = batch;
   const text = `🩺 헬스케어 레이더\n${formatKstDate(labelDate)} 수집 · 총 ${counts.total}건\n🔴 높음 ${counts.high} · 🟡 보통 ${counts.medium} · ⚪ 참고 ${counts.low}`;
   await sendKakaoMemo(text, resolveDashboardUrl());
-  return 'sent';
+  return batch.truncated ? `sent (TRUNCATED: hit ${LOAD_LIMIT}-article load limit)` : 'sent';
 }
 
 export async function GET(req: NextRequest) {
@@ -131,7 +143,7 @@ export async function GET(req: NextRequest) {
   let ai = 'no-collection-date';
   let dedupe = 'no-collection-date';
   if (collectedDate) {
-    const preAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    const preAiArticles = await getRecentArticles({ collectedDate, limit: LOAD_LIMIT }).then((p) => p.articles);
     const aiDeadline = routeStart + maxDuration * 1000 - AI_RESERVE_MS;
     ai = await enrichArticles(preAiArticles, aiDeadline)
       .then((r) => {
@@ -141,7 +153,7 @@ export async function GET(req: NextRequest) {
       })
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
-    const postAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    const postAiArticles = await getRecentArticles({ collectedDate, limit: LOAD_LIMIT }).then((p) => p.articles);
     dedupe = await demoteDuplicatePriorities(postAiArticles)
       .then((r) => `demoted ${r.demoted} across ${r.groups} groups`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);

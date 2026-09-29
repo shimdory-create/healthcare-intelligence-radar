@@ -170,6 +170,15 @@ export function computeSystemHealthIssues(
       issues.push({ severity: 'critical', message: `최근 리포트 이메일 발송 실패: ${lastCollect.emailResult}` });
     }
 
+    // real articles silently dropped from the digest/report because a single load hit its row
+    // cap -- found live 2026-09-29 that daily volume (300-365 on a busy day) was already close
+    // enough to the old 500-row cap to make this a real, not hypothetical, risk for a multi-day
+    // watermark rollup. The cap itself was raised the same day, but this stays as a net in case
+    // volume ever outgrows even the new one.
+    if (lastCollect.emailResult?.includes('TRUNCATED')) {
+      issues.push({ severity: 'critical', message: `최근 리포트에서 기사가 잘렸습니다: ${lastCollect.emailResult}` });
+    }
+
     const recentKakaoErrors = collectRuns.slice(0, KAKAO_ERROR_STREAK).filter((r) => r.kakaoResult?.startsWith('error'));
     if (recentKakaoErrors.length >= KAKAO_ERROR_STREAK) {
       issues.push({

@@ -79,6 +79,17 @@ describe('computeSystemHealthIssues', () => {
     expect(issues.some((i) => i.severity === 'critical' && i.message.includes('이메일 발송 실패'))).toBe(true);
   });
 
+  it('flags a critical issue when the last collect run truncated the digest at the row cap', () => {
+    const truncated = makeRun({ emailResult: 'sent (TRUNCATED: hit 3000-article load limit)' });
+    const issues = computeSystemHealthIssues([truncated], [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.severity === 'critical' && i.message.includes('기사가 잘렸습니다'))).toBe(true);
+  });
+
+  it('does not flag truncation for a normal "sent" email result', () => {
+    const issues = computeSystemHealthIssues([makeRun({})], [makeSourceHealth({})], NOW);
+    expect(issues.some((i) => i.message.includes('기사가 잘렸습니다'))).toBe(false);
+  });
+
   it('flags a warning when AI analysis failed on the last 2 collect runs in a row', () => {
     const runs = [
       makeRun({ id: 2, aiResult: 'error: Gemini API error 404: model not found', startedAt: new Date(NOW.getTime() - 86_400_000) }),

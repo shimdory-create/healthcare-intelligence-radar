@@ -18,6 +18,11 @@ export const maxDuration = 200;
 
 const AI_RESERVE_MS = 30_000;
 
+// row cap for a single getRecentArticles() call -- real daily volume already hits 300-365 on a
+// busy day (found live 2026-09-29), which made the original 500 cap too close for comfort even
+// for a single intraday window. See collect/route.ts's loadBatch comment for the fuller reasoning.
+const LOAD_LIMIT = 3000;
+
 export async function GET(req: NextRequest) {
   const routeStart = Date.now();
   const secret = process.env.CRON_SECRET;
@@ -48,7 +53,7 @@ export async function GET(req: NextRequest) {
   let ai = 'no-collection-date';
   let dedupe = 'no-collection-date';
   if (collectedDate) {
-    const preAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    const preAiArticles = await getRecentArticles({ collectedDate, limit: LOAD_LIMIT }).then((p) => p.articles);
     const aiDeadline = routeStart + maxDuration * 1000 - AI_RESERVE_MS;
     ai = await enrichArticles(preAiArticles, aiDeadline)
       .then((r) => {
@@ -58,7 +63,7 @@ export async function GET(req: NextRequest) {
       })
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
 
-    const postAiArticles = await getRecentArticles({ collectedDate, limit: 500 }).then((p) => p.articles);
+    const postAiArticles = await getRecentArticles({ collectedDate, limit: LOAD_LIMIT }).then((p) => p.articles);
     dedupe = await demoteDuplicatePriorities(postAiArticles)
       .then((r) => `demoted ${r.demoted} across ${r.groups} groups`)
       .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
