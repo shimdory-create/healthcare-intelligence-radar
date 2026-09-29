@@ -48,6 +48,15 @@ create index if not exists idx_articles_duplicate_of on articles (duplicate_of_i
 -- via EXPLAIN ANALYZE on the live table)
 create index if not exists idx_articles_collected_at on articles (collected_at);
 
+-- supports the OTHER shape of collected_at filter: a multi-day watermark rollup
+-- (collectedDateCondition's array branch in db.ts, used by getReportCandidates and the digest's
+-- loadBatch) filters on `(collected_at at time zone 'Asia/Seoul')::date = any(...)`, which the
+-- plain index above can't serve (it's a function of collected_at, not collected_at itself) --
+-- confirmed live 2026-09-29 (sustainability audit) via EXPLAIN ANALYZE: that query was doing a
+-- sequential scan (253ms at just ~4,200 rows, and only getting worse as the table grows toward
+-- its ~365-day retention ceiling) until this expression index dropped it to under 1ms.
+create index if not exists idx_articles_collected_at_kst_date on articles (((collected_at at time zone 'Asia/Seoul')::date));
+
 -- generic key-value store for small pieces of app state (e.g. the Kakao OAuth refresh token)
 -- that need to persist across serverless invocations, unlike a static env var
 create table if not exists app_settings (
